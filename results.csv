@@ -1,0 +1,5 @@
+time,game_id,model,effort,player,faction,vp,place,players,winner,opponents
+2026-10-18 21:27,246e3e7ef614454d81cfb60e496282ec,claude-opus-5-5,default,Claude 1,orcs,50,1,4,0,humans: Claude (claude-opus-5-5/default); nagas: Claude (claude-opus-5-5/default); undead: Claude (claude-opus-5-5/default)
+2026-10-18 21:27,246e3e7ef614454d81cfb60e496282ec,claude-opus-5-5,default,Claude 2,humans,50,1,4,1,orcs: Claude (claude-opus-5-5/default); nagas: Claude (claude-opus-5-5/default); undead: Claude (claude-opus-5-5/default)
+2026-10-18 21:27,246e3e7ef614454d81cfb60e496282ec,claude-opus-5-5,default,Claude 3,nagas,41,4,4,0,orcs: Claude (claude-opus-5-5/default); humans: Claude (claude-opus-5-5/default); undead: Claude (claude-opus-5-5/default)
+2026-10-18 21:27,246e3e7ef614454d81cfb60e496282ec,claude-opus-5-5,default,Claude 4,undead,42,3,4,0,orcs: Claude (claude-opus-5-5/default); humans: Claude (claude-opus-5-5/default); nagas: Claude (claude-opus-5-5/default)
