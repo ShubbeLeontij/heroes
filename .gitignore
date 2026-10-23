@@ -5,3 +5,4 @@ saves/
 .pytest_cache/
 logs/
 profiles/
+strategy/

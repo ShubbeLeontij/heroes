@@ -1,12 +1,14 @@
 """Минимальные офлайн-проверки Claude-игрока: вызов CLI подменяется генератором ответов."""
 import json
 import random
+import shutil
+import subprocess
 
 from heroes import cli
 from heroes.engine.game import Game
 from heroes.players.claude_cli import ClaudeError, ClaudePlayer
 from heroes.players.random_bot import RandomBot
-from heroes.protocol import notes, prompts, schemas
+from heroes.protocol import journal, notes, prompts, schemas
 
 from schema_fuzz import random_instance
 
@@ -269,6 +271,22 @@ def test_rules_confusion_log(strategy_dir):
     assert "answer rejected by the engine" in log and "**Engine:**" in log
     assert "question from Claude" in log and "crossed-out portal region" in log
     assert "claude-opus-5-5/default · Player 1 (Орки)" in log
+
+
+def test_strategy_branch_worktree(tmp_path, strategy_dir):
+    def git(*args):
+        return subprocess.run(["git", "-C", str(tmp_path), *journal.AUTHOR, *args], capture_output=True,
+                              text=True, check=True).stdout
+    git("init", "-q", "-b", "master")
+    git("commit", "-q", "--allow-empty", "-m", "code")
+    notes.update(VARIANT, "orcs", {"general": "Build the Свалка first."})   # strategy/ занята без git — не трогаем
+    assert not journal.ensure_repo()
+    shutil.rmtree(strategy_dir)
+    assert journal.ensure_repo() and (strategy_dir / ".git").is_file()
+    assert journal.commit([notes.update(VARIANT, "orcs", {"general": "Build the Свалка first."})], "Орки: first notes")
+    assert git("log", "--format=%s", journal.BRANCH, "--").split("\n")[0] == "Орки: first notes"
+    assert git("log", "--format=%s", "master", "--").strip() == "code"
+    assert f"{VARIANT}/orcs.md" in git("ls-tree", "-r", "--name-only", journal.BRANCH)
 
 
 class Answering(ClaudePlayer):

@@ -55,8 +55,10 @@ Claude-игроки работают через установленный Claud
 ### Как Claude учится
 
 Опыт ведётся отдельно для каждого варианта Claude — модели и уровня усилий (`--effort`):
-`strategy/<модель>/<effort>/` (`default` — без `--effort`). Папка `strategy/` — отдельный git-репозиторий,
-устройство описано в `strategy/README.md`.
+`strategy/<модель>/<effort>/` (`default` — без `--effort`). Папка `strategy/` — рабочая копия ветки `strategy`
+этого же репозитория (git worktree): коммиты Claude-игроков идут в неё, а не в `master`. Игра сама
+подключает папку при первом разборе партии (`git worktree add strategy strategy`), пушить —
+`git push origin strategy`. Устройство описано в `strategy/README.md`.
 
 - **Заметки по фракциям** (`<фракция>.md`): разделы «General strategy», «Reminders» и «Against <фракция>».
   Файл своей фракции Claude получает в системном промпте. После партии он может, но не обязан, переписать

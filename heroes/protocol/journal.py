@@ -1,4 +1,5 @@
-"""Журналы обучения Claude в папке strategy/ (NOTES_DIR) — отдельном git-репозитории.
+"""Журналы обучения Claude в папке strategy/ (NOTES_DIR) — рабочей копии ветки strategy основного
+репозитория (git worktree): коммиты Claude не попадают в ветки с кодом, а пушатся в тот же origin.
 
 - git: каждое изменение заметок и скриптов Claude — коммит с объяснением от самого Claude;
   перед тем как править заметки, Claude видит последние изменения своего файла (history).
@@ -17,6 +18,7 @@ from pathlib import Path
 
 from . import notes
 
+BRANCH = "strategy"
 AUTHOR = ["-c", "user.name=Heroes Claude", "-c", "user.email=claude@heroes.local"]
 HISTORY_COMMITS = 3
 RESULTS_FIELDS = ["time", "game_id", "model", "effort", "player", "faction", "vp", "place", "players", "winner", "opponents"]
@@ -32,14 +34,33 @@ def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
                           errors="replace", check=check)
 
 
+def project_repo() -> Path | None:
+    """Основной репозиторий, если strategy/ лежит в его корне (не так — в тестах и в архиве без .git)."""
+    top = subprocess.run(["git", "-C", str(root().parent), "rev-parse", "--show-toplevel"], capture_output=True,
+                         text=True, encoding="utf-8", errors="replace", check=False).stdout.strip()
+    return Path(top) if top and Path(top).resolve() == root().parent.resolve() else None
+
+
 def ensure_repo() -> bool:
-    """Создать репозиторий в strategy/, если его нет. False — git не установлен."""
+    """Подключить strategy/, если её ещё нет: в проекте — ветку BRANCH основного репозитория отдельной
+    рабочей копией (git worktree; ветку из origin git берёт сам, нет и там — новая пустая), вне его —
+    свой репозиторий. False — git не установлен или strategy/ в проекте уже занята файлами без git."""
     if not shutil.which("git"):
         return False
-    root().mkdir(parents=True, exist_ok=True)
-    if not (root() / ".git").exists():
+    if (root() / ".git").exists():
+        return True
+    if repo := project_repo():
+        if any(root().glob("*")):
+            return False
+        add = ["git", "-C", str(repo), "worktree", "add", "-q"]
+        if subprocess.run(add + [str(root()), BRANCH], capture_output=True, check=False).returncode == 0:
+            return True
+        if subprocess.run(add + ["--orphan", "-b", BRANCH, str(root())], capture_output=True, check=False).returncode:
+            return False
+    else:
+        root().mkdir(parents=True, exist_ok=True)
         git("init", "-q")
-        (root() / ".gitignore").write_text("*.tmp\n__pycache__/\n", encoding="utf-8")
+    (root() / ".gitignore").write_text("*.tmp\n__pycache__/\n", encoding="utf-8")
     return True
 
 
