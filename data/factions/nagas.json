@@ -1,0 +1,183 @@
+{
+  "id": "nagas",
+  "name": "Наги",
+  "movement": {"field": 1, "forest": 2, "mountain": 3, "lake": 1},
+  "units": {
+    "krak":  {"name": "Крак", "strength": 0, "cost": {}, "start": 2},
+    "hydra": {"name": "Гидра", "strength": 18, "cost": {}, "start": 0}
+  },
+  "monsters": [
+    {"strength": 3, "vp": 1, "loot": {"any": 2}},
+    {"strength": 3, "vp": 1, "loot": {"wood": 1, "iron": 1, "gold": 1}},
+    {"strength": 3, "vp": 1, "loot": {"wood": 1, "iron": 1, "gold": 1}},
+    {"strength": 8, "vp": 2, "loot": {"wood": 2, "iron": 2, "gold": 2}},
+    {"strength": 14, "vp": 3, "loot": {"wood": 2, "iron": 2, "gold": 2}},
+    {"strength": 20, "vp": 4, "loot": {"wood": 3, "iron": 3, "gold": 3}},
+    {"strength": 24, "vp": 5, "loot": {"wood": 3, "iron": 3, "gold": 3}},
+    {"strength": 33, "vp": 7, "loot": {"wood": 4, "iron": 4, "gold": 4}}
+  ],
+  "artifact_conditions": {
+    "Таскар": {"condition": "pay", "cost": {"krak": 3}},
+    "Цурт": {"condition": "pay", "cost": {"krak": 3}},
+    "Дорталь": {"condition": "pay", "cost": {"krak": 3}}
+  },
+  "rules": {
+    "kraks": {
+      "name": "Краки",
+      "text": "Kraks are both units and the nagas' unique resource. At the start of every build action you must exchange all possible resources for Крак: 5 wood, 5 iron or 4 gold per Крак; the rest stays in storage. Each Крак's strength equals the number of Крак in the battle. Buildings are paid in Крак. Resources give no VP at game end.",
+      "text_ru": "Краки — и боевые единицы, и уникальный ресурс наг. В начале каждого строительства обязательно обменяйте все возможные ресурсы на краков: 5 дерева, 5 железа или 4 золота за крака; излишки остаются на складе. Сила каждого крака равна количеству краков в сражении. Здания оплачиваются краками. За ресурсы ПО в конце игры не начисляются.",
+      "text_board": "{wood} 5 = 1{krak}, {iron} 5 = 1{krak}, {gold} 4 = 1{krak}. {power} каждого крака равна количеству краков в сражении.",
+      "effects": [
+        {"type": "krak_exchange", "unit": "krak", "rates": {"wood": 5, "iron": 5, "gold": 4}, "when": "build_start", "mandatory": true},
+        {"type": "strength_equals_count", "unit": "krak"},
+        {"type": "no_resource_vp"}
+      ]
+    },
+    "hydra": {
+      "name": "Гидра",
+      "text": "At most 1 Гидра on the map. -2 strength for each Крак if Гидра is in the same region as your Крак. When you build, circle 1 note. Summon Гидра into any lake region when 2 notes of a pair are circled. During the move action Гидра moves separately by 1 region.",
+      "text_ru": "Не более 1 гидры на поле. −2 к силе за каждого крака, если гидра находится в одном регионе с краками. При строительстве обведите 1 любую ноту. Призовите гидру в любой озёрный регион, если обведены 2 соседние ноты. При перемещении гидра перемещается отдельно на 1 регион.",
+      "text_board": "Не более 1 гидры на поле. −2{power} за каждого крака, если гидра находится в одном регионе с краками. При {build} обведите 1 любую {note}. Призовите гидру в любой {lake} регион, если обведены 2 соседние {note}. При перемещении гидра перемещается отдельно на 1 регион.",
+      "effects": [
+        {"type": "hydra", "unit": "hydra", "move": 1, "krak_penalty": 2, "summon_terrain": "lake"},
+        {"type": "notes", "pairs": 6, "per_building": 1}
+      ]
+    }
+  },
+  "buildings": {
+    "lighthouse": {
+      "name": "Маяк", "level": 1, "vp": 3,
+      "cost": {"krak": 3}, "requires": [],
+      "text": "Гидра may move 2 regions.",
+      "text_ru": "Гидра может перемещаться на 2 региона.",
+      "text_board": "Гидра может перемещаться на 2 региона.",
+      "effects": [{"type": "hydra_move", "value": 2}]
+    },
+    "ocean_heart": {
+      "name": "Сердце океана", "level": 1, "vp": 2,
+      "cost": {"krak": 3}, "requires": [],
+      "text": "Strength of Гидра becomes 25.",
+      "text_ru": "Сила гидры увеличивается до 25.",
+      "text_board": "{power} гидры увеличивается до 25.",
+      "effects": [{"type": "set_strength", "unit": "hydra", "value": 25}]
+    },
+    "temple": {
+      "name": "Храм", "level": 1, "vp": 0,
+      "cost": {"krak": 4}, "requires": [],
+      "text": "+2 VP at game end for each summoning of Гидра.",
+      "text_ru": "+2 ПО в конце игры за каждый призыв гидры.",
+      "text_board": "+2{laurel} в конце игры за каждый призыв гидры.",
+      "effects": [{"type": "vp_per_hydra_summon", "value": 2}]
+    },
+    "dam": {
+      "name": "Плотина", "level": 1, "vp": 0,
+      "cost": {"krak": 3}, "requires": [],
+      "text": "+1 VP at game end for each lake region on the map.",
+      "text_ru": "+1 ПО в конце игры за каждый озёрный регион на карте.",
+      "text_board": "+1{laurel} в конце игры за каждый {lake} регион на карте.",
+      "effects": [{"type": "vp_per_terrain_region", "terrain": "lake", "value": 1}]
+    },
+    "mine": {
+      "name": "Шахта", "level": 1, "vp": 2,
+      "cost": {"krak": 2}, "requires": [],
+      "text": "Pay another player 3 resources of your choice to avoid a battle with them.",
+      "text_ru": "Заплатите другому игроку 3 любых ресурса, чтобы избежать сражения с ним.",
+      "text_board": "Заплатите другому игроку 3{any}, чтобы избежать сражения с ним.",
+      "effects": [{"type": "pay_to_avoid_battle", "cost_per_player": {"any": 3}}]
+    },
+    "geyser": {
+      "name": "Гейзер", "level": 1, "vp": 2,
+      "cost": {"krak": 2}, "requires": [],
+      "text": "At the end of the move action you may spend 1 movement point to turn your current region into a lake.",
+      "text_ru": "В конце перемещения вы можете потратить 1 ОП, чтобы превратить свой текущий регион в озёрный.",
+      "text_board": "В конце перемещения вы можете потратить 1{mp}, чтобы превратить свой текущий регион в {lake}.",
+      "effects": [{"type": "make_lake", "cost_mp": 1}]
+    },
+    "ship": {
+      "name": "Корабль", "level": 1, "vp": 3,
+      "cost": {"krak": 2}, "requires": [],
+      "text": "When you gain an artifact, circle 1 note.",
+      "text_ru": "При получении артефакта обведите 1 ноту.",
+      "text_board": "При получении {artifact} обведите 1{note}.",
+      "effects": [{"type": "note_on_artifact", "value": 1}]
+    },
+    "feeder": {
+      "name": "Кормушка", "level": 1, "vp": 2,
+      "cost": {"krak": 3}, "requires": [],
+      "text": "Hiring Крак costs 1 wood and 1 iron less.",
+      "text_ru": "Наём краков стоит на 1 дерево и 1 железо меньше.",
+      "text_board": "Наём краков стоит на 1{wood} и 1{iron} меньше.",
+      "effects": [{"type": "krak_exchange_rates", "rates": {"wood": 4, "iron": 4}}]
+    },
+    "palace": {
+      "name": "Дворец", "level": 1, "vp": 2,
+      "cost": {"krak": 4}, "requires": [],
+      "text": "+1 VP at game end for each of your buildings on a foundation.",
+      "text_ru": "+1 ПО в конце игры за каждое ваше здание на фундаменте.",
+      "text_board": "+1{laurel} в конце игры за каждое ваше здание на фундаменте.",
+      "effects": [{"type": "vp_per_built_foundation", "value": 1}]
+    },
+    "reef": {
+      "name": "Риф", "level": 1, "vp": 1,
+      "cost": {"krak": 3}, "requires": [],
+      "text": "Крак do not reduce the strength of Гидра.",
+      "text_ru": "Краки не снижают силу гидры.",
+      "text_board": "Краки не снижают {power} гидры.",
+      "effects": [{"type": "no_krak_hydra_penalty"}]
+    }
+  },
+  "artifacts": {
+    "Таскар": {
+      "text": "+4 VP at game end.",
+      "text_ru": "+4 ПО в конце игры.",
+      "text_board": "+4{laurel} в конце игры.",
+      "effects": [{"type": "vp_flat", "value": 4}]
+    },
+    "Цурт": {
+      "text": "+4 VP at game end.",
+      "text_ru": "+4 ПО в конце игры.",
+      "text_board": "+4{laurel} в конце игры.",
+      "effects": [{"type": "vp_flat", "value": 4}]
+    },
+    "Дорталь": {
+      "text": "+4 VP at game end.",
+      "text_ru": "+4 ПО в конце игры.",
+      "text_board": "+4{laurel} в конце игры.",
+      "effects": [{"type": "vp_flat", "value": 4}]
+    },
+    "Золен": {
+      "text": "+5 VP at game end.",
+      "text_ru": "+5 ПО в конце игры.",
+      "text_board": "+5{laurel} в конце игры.",
+      "effects": [{"type": "vp_flat", "value": 5}]
+    },
+    "Содмур": {
+      "text": "+5 VP at game end.",
+      "text_ru": "+5 ПО в конце игры.",
+      "text_board": "+5{laurel} в конце игры.",
+      "effects": [{"type": "vp_flat", "value": 5}]
+    },
+    "Шог Ид": {
+      "text": "+3 VP at game end.",
+      "text_ru": "+3 ПО в конце игры.",
+      "text_board": "+3{laurel} в конце игры.",
+      "effects": [{"type": "vp_flat", "value": 3}]
+    }
+  },
+  "notes": [
+    "Перемещение: поле 1, лес 2, горы 3, озеро 1; улучшений нет.",
+    "Своя линия чудовищ (поле monsters) — заменяет общую из map.json.",
+    "Артефакты Таскара, Цурта и Дорталя наги получают за 3 крака (поле artifact_conditions); остальные условия общие.",
+    "Все здания 1-го уровня, оплачиваются краками; каждое построенное здание даёт 1 ноту.",
+    "Обмен на краков обязателен в начале каждого строительства: все возможные ресурсы; излишки остаются (правила, с. 16). Кормушка: дерево и железо по 4.",
+    "За ресурсы и краков ПО в конце игры не дают — на складе вместо порогов курс обмена.",
+    "Ноты: 12 нот = 6 пар; переиспользовать нельзя. Обводя ноту, игрок выбирает: закрыть начатую пару (тогда гидра призывается — обязательно и сразу) или начать следующую пару (отложить призыв). Первая нота всегда начинает пару.",
+    "Гидра: одна на карте, новая заменяет старую. Призыв — в любой озёрный регион (можно проклятый, гидра от проклятия не гибнет — FAQ). Ходит отдельно на 1 (Маяк — 2) регион любой местности и через порталы, не тратя ОП игрока; регион, куда она пришла одна, не считается посещённым; ресурсы и артефакты не получает.",
+    "Гидра в одном регионе с игроком — обычная единица, сила −2 за каждого крака в войске (заявлен он или нет); Риф отменяет. Гидра в отдельном регионе с соперниками обязана сразиться — это сражение между игроками, гидра — самостоятельная единица. Победа отдельной гидры (над игроком, чудовищем, крепостью) даёт только ПО — ресурсы и награды теряются; рядом с нагой гидра — обычная единица и награда обычная. Заявленная гидра погибает после сражения, отдельная — после любого своего сражения.",
+    "Если гидра стоит в регионе с фундаментом, а игрок — в другом, строить на этом фундаменте нельзя.",
+    "Шахта (FAQ): если хоть один соперник в вашем регионе хочет сражаться, заплатите каждому сопернику в регионе по 3 любых ресурса — сражения нет; при нескольких претендентах крепость и артефакт в этом раунде никто не получает.",
+    "Плотина: все озёрные регионы, открытые при текущем числе игроков, включая превращённые Гейзером.",
+    "Гейзер: смена местности общая для всех игроков; для Шог Ида засчитываются регионы, бывшие горными в момент посещения.",
+    "Храм: +2 ПО за каждый призыв гидры (максимум 6 призывов)."
+  ]
+}

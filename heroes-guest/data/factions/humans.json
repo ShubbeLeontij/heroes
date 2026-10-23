@@ -1,0 +1,137 @@
+{
+  "id": "humans",
+  "name": "Люди",
+  "movement": {"field": 1, "forest": 2, "mountain": 3, "lake": 2},
+  "units": {
+    "soldier": {"name": "Солдат", "strength": 2, "cost": {"gold": 2}, "start": 2},
+    "knight":  {"name": "Латник", "strength": 3, "cost": {"gold": 3}, "start": 0},
+    "archmage": {"name": "Архимаг", "strength": 5, "cost": {"gold": 5}, "start": 0}
+  },
+  "buildings": {
+    "town_hall": {
+      "name": "Ратуша", "level": 1, "vp": 0,
+      "cost": {"wood": 2, "iron": 2, "gold": 2}, "requires": [],
+      "text": "Gain 1 resource of your choice when you visit a new region.",
+      "text_ru": "Получите 1 любой ресурс при посещении нового региона.",
+      "text_board": "Получите 1{any} при посещении нового региона.",
+      "effects": [{"type": "on_new_region", "gain": {"any": 1}}]
+    },
+    "warriors_guild": {
+      "name": "Гильдия воинов", "level": 1, "vp": 0,
+      "cost": {"iron": 4}, "requires": [],
+      "text": "Hire Солдат.",
+      "text_ru": "Наём солдат.",
+      "text_board": "Наём солдат.",
+      "effects": [{"type": "hire", "unit": "soldier"}]
+    },
+    "market": {
+      "name": "Рынок", "level": 2, "vp": 0,
+      "cost": {"iron": 4}, "requires": [],
+      "text": "When you defeat a monster, gain 2 resources of your choice.",
+      "text_ru": "При победе над чудовищем получите 2 любых ресурса.",
+      "text_board": "При победе над чудовищем получите 2{any}.",
+      "effects": [{"type": "on_monster_win", "gain": {"any": 2}}]
+    },
+    "illusion_tower": {
+      "name": "Башня иллюзий", "level": 2, "vp": 1,
+      "cost": {"iron": 3}, "requires": ["town_hall"],
+      "text": "At the end of the build action you may pay 4 wood to make a fortress, artifact, portal or foundation available only to you.",
+      "text_ru": "В конце строительства вы можете заплатить 4 дерева, чтобы крепость, артефакт, портал или фундамент стал доступен только для вас.",
+      "text_board": "В конце {build} вы можете заплатить 4{wood}, чтобы {artifact}, крепость, портал или фундамент стал доступен только для вас.",
+      "effects": [{"type": "reserve_object", "cost": {"wood": 4}}]
+    },
+    "rangers_house": {
+      "name": "Дом следопытов", "level": 3, "vp": 1,
+      "cost": {"wood": 3, "iron": 2}, "requires": ["market"],
+      "text": "Movement cost in forests drops to 1.",
+      "text_ru": "Стоимость перемещения по лесу снижается до 1.",
+      "text_board": "Стоимость перемещения по {forest} снижается до 1{mp}.",
+      "effects": [{"type": "set_move_cost", "terrain": "forest", "value": 1}]
+    },
+    "tavern": {
+      "name": "Таверна", "level": 3, "vp": 2,
+      "cost": {"wood": 3, "iron": 4}, "requires": ["illusion_tower"],
+      "text": "+1 VP at game end for each defeated (circled) monster.",
+      "text_ru": "+1 ПО в конце игры за каждое побеждённое чудовище.",
+      "text_board": "+1{laurel} в конце игры за каждое побеждённое чудовище.",
+      "effects": [{"type": "vp_per_circled_monster", "value": 1}]
+    },
+    "barracks": {
+      "name": "Казармы", "level": 3, "vp": 3,
+      "cost": {"iron": 4}, "requires": ["illusion_tower", "warriors_guild"],
+      "text": "Hire Латник.",
+      "text_ru": "Наём латников.",
+      "text_board": "Наём латников.",
+      "effects": [{"type": "hire", "unit": "knight"}]
+    },
+    "arsenal": {
+      "name": "Арсенал", "level": 4, "vp": 2,
+      "cost": {"wood": 3, "iron": 3, "gold": 5}, "requires": ["rangers_house"],
+      "text": "Strength: Солдат becomes 3, Латник 4, Архимаг 7.",
+      "text_ru": "Сила солдат увеличивается до 3, латников — до 4, архимагов — до 7.",
+      "text_board": "{power} солдат увеличивается до 3, {power} латников — до 4, {power} архимагов — до 7.",
+      "effects": [
+        {"type": "set_strength", "unit": "soldier", "value": 3},
+        {"type": "set_strength", "unit": "knight", "value": 4},
+        {"type": "set_strength", "unit": "archmage", "value": 7}
+      ]
+    },
+    "cathedral": {
+      "name": "Собор", "level": 4, "vp": 3,
+      "cost": {"iron": 5}, "requires": ["tavern"],
+      "text": "Hire cost: Латник drops to 2 gold, Архимаг to 3 gold.",
+      "text_ru": "Стоимость латников снижается до 2 золота, архимагов — до 3 золота.",
+      "text_board": "Стоимость латников снижается до 2{gold}, а стоимость архимагов — до 3{gold}.",
+      "effects": [
+        {"type": "set_hire_cost", "unit": "knight", "cost": {"gold": 2}},
+        {"type": "set_hire_cost", "unit": "archmage", "cost": {"gold": 3}}
+      ]
+    },
+    "mages_guild": {
+      "name": "Гильдия магов", "level": 4, "vp": 4,
+      "cost": {"wood": 3, "iron": 5, "gold": 3}, "requires": ["barracks"],
+      "text": "Hire Архимаг.",
+      "text_ru": "Наём архимагов.",
+      "text_board": "Наём архимагов.",
+      "effects": [{"type": "hire", "unit": "archmage"}]
+    }
+  },
+  "artifacts": {
+    "Таскар": {
+      "text": "Whenever you gain wood, you may take the same amount of gold and/or iron instead.",
+      "text_ru": "Вместо дерева можете получить столько же золота и/или железа.",
+      "text_board": "Вместо {wood} можете получить столько же {gold} и/или {iron}.",
+      "effects": [{"type": "wood_substitution"}]
+    },
+    "Цурт": {
+      "text": "Gain 3 Архимаг.",
+      "text_ru": "Получите 3 архимагов.",
+      "text_board": "Получите 3 архимагов.",
+      "effects": [{"type": "gain_units", "unit": "archmage", "count": 3}]
+    },
+    "Дорталь": {
+      "text": "+1 VP at game end for each of your buildings on a foundation.",
+      "text_ru": "+1 ПО в конце игры за каждое ваше здание на фундаменте.",
+      "text_board": "+1{laurel} в конце игры за каждое ваше здание на фундаменте.",
+      "effects": [{"type": "vp_per_built_foundation", "value": 1}]
+    },
+    "Золен": {
+      "text": "Movement cost in mountains drops to 2.",
+      "text_ru": "Стоимость перемещения по горам снижается до 2.",
+      "text_board": "Стоимость перемещения по {mountain} снижается до 2{mp}.",
+      "effects": [{"type": "set_move_cost", "terrain": "mountain", "value": 2}]
+    },
+    "Содмур": {
+      "text": "+1 VP at game end for each captured fortress.",
+      "text_ru": "+1 ПО в конце игры за каждую захваченную крепость.",
+      "text_board": "+1{laurel} в конце игры за каждую захваченную крепость.",
+      "effects": [{"type": "vp_per_fortress", "value": 1}]
+    },
+    "Шог Ид": {
+      "text": "Gain 8 resources of your choice.",
+      "text_ru": "Получите 8 любых ресурсов.",
+      "text_board": "Получите 8{any}.",
+      "effects": [{"type": "gain", "resources": {"any": 8}}]
+    }
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "id": "elves",
+  "name": "Эльфы",
+  "movement": {"field": 1, "forest": 2, "mountain": 3, "lake": 2},
+  "units": {
+    "pixie":   {"name": "Пикси", "strength": 1, "cost": {"gold": 1}, "start": 3},
+    "griffin": {"name": "Грифон", "strength": 3, "cost": {"gold": 3}, "start": 0},
+    "ent":     {"name": "Энт", "strength": 6, "cost": {"gold": 5}, "start": 0}
+  },
+  "buildings": {
+    "forge": {
+      "name": "Горн", "level": 1, "vp": 0,
+      "cost": {"iron": 3, "gold": 1}, "requires": [],
+      "text": "+1 to your total army strength in battle.",
+      "text_ru": "+1 к итоговой силе войск в сражении.",
+      "text_board": "+1 к итоговой {power} войск в сражении.",
+      "effects": [{"type": "battle_strength_bonus", "value": 1, "against": "any"}]
+    },
+    "pixie_thicket": {
+      "name": "Заросли пикси", "level": 1, "vp": 0,
+      "cost": {"wood": 2, "iron": 2}, "requires": [],
+      "text": "Hire Пикси.",
+      "text_ru": "Наём пикси.",
+      "text_board": "Наём пикси.",
+      "effects": [{"type": "hire", "unit": "pixie"}]
+    },
+    "armorer": {
+      "name": "Лавка бронника", "level": 2, "vp": 1,
+      "cost": {"iron": 4}, "requires": ["forge"],
+      "text": "Before a battle, pay X wood to upgrade the strength of X units for this battle (Пикси 2, Грифон 5, Энт 10).",
+      "text_ru": "Заплатите X дерева перед сражением, чтобы модифицировать силу X боевых единиц в этом сражении.",
+      "text_board": "Заплатите X{wood} перед сражением, чтобы модифицировать {power} X боевых единиц в этом сражении.",
+      "effects": [{"type": "pay_to_upgrade_units", "cost_per_unit": {"wood": 1}, "duration": "battle",
+                   "strength": {"pixie": 2, "griffin": 5, "ent": 10}}]
+    },
+    "aerie": {
+      "name": "Гнездовье", "level": 2, "vp": 1,
+      "cost": {"wood": 3, "iron": 3}, "requires": ["pixie_thicket"],
+      "text": "Hire Грифон. You may take an artifact for wood if the number of Грифон in your army is at least its wood price.",
+      "text_ru": "Наём грифонов. Можете забирать артефакт за дерево, если грифонов в вашем войске не меньше цены этого артефакта в дереве.",
+      "text_board": "Наём грифонов. *Можете забирать {artifact} за {wood}, если грифонов в вашем войске ≥ цене этого {artifact} в {wood}.",
+      "effects": [
+        {"type": "hire", "unit": "griffin"},
+        {"type": "artifact_for_wood", "unit": "griffin",
+         "prices": {"Золен": 2, "Шог Ид": 2, "Содмур": 3, "Цурт": 4, "Таскар": 5, "Дорталь": 6}}
+      ]
+    },
+    "wooded_cliff": {
+      "name": "Лесистый утёс", "level": 3, "vp": 2,
+      "cost": {"iron": 6}, "requires": ["forge"],
+      "text": "You do not spend wood when constructing buildings.",
+      "text_ru": "Вы не тратите дерево при строительстве зданий.",
+      "text_board": "Вы не тратите {wood} при {build} здания.",
+      "effects": [{"type": "free_build_resource", "resource": "wood"}]
+    },
+    "observatory": {
+      "name": "Обсерватория", "level": 3, "vp": 2,
+      "cost": {"wood": 3, "iron": 2}, "requires": ["armorer", "aerie"],
+      "text": "During the move action you gain +1 movement point.",
+      "text_ru": "При перемещении вы получаете +1 ОП.",
+      "text_board": "При перемещении вы получаете +1{mp}.",
+      "effects": [{"type": "extra_move_points", "value": 1}]
+    },
+    "watch": {
+      "name": "Дозор", "level": 3, "vp": 2,
+      "cost": {"wood": 2, "iron": 2, "gold": 2}, "requires": ["aerie"],
+      "text": "+2 VP at game end for each captured fortress.",
+      "text_ru": "+2 ПО в конце игры за каждую захваченную крепость.",
+      "text_board": "+2{laurel} в конце игры за каждую захваченную крепость.",
+      "effects": [{"type": "vp_per_fortress", "value": 2}]
+    },
+    "guiding_forest": {
+      "name": "Путеводный лес", "level": 4, "vp": 1,
+      "cost": {"iron": 4, "gold": 2}, "requires": ["wooded_cliff"],
+      "text": "Movement cost in forests drops to 1.",
+      "text_ru": "Стоимость перемещения по лесу снижается до 1.",
+      "text_board": "Стоимость перемещения по {forest} снижается до 1{mp}.",
+      "effects": [{"type": "set_move_cost", "terrain": "forest", "value": 1}]
+    },
+    "druid_house": {
+      "name": "Дом друида", "level": 4, "vp": 3,
+      "cost": {"wood": 2, "iron": 5, "gold": 2}, "requires": ["observatory"],
+      "text": "+1 VP at game end for each of your artifacts.",
+      "text_ru": "+1 ПО в конце игры за каждый свой артефакт.",
+      "text_board": "+1{laurel} в конце игры за каждый свой {artifact}.",
+      "effects": [{"type": "vp_per_artifact", "value": 1}]
+    },
+    "great_tree": {
+      "name": "Великое древо", "level": 4, "vp": 4,
+      "cost": {"wood": 3, "iron": 5, "gold": 3}, "requires": ["observatory", "watch"],
+      "text": "Hire Энт.",
+      "text_ru": "Наём энтов.",
+      "text_board": "Наём энтов.",
+      "effects": [{"type": "hire", "unit": "ent"}]
+    }
+  },
+  "artifacts": {
+    "Таскар": {
+      "text": "Gain 3 Энт.",
+      "text_ru": "Получите 3 энтов.",
+      "text_board": "Получите 3 энтов.",
+      "effects": [{"type": "gain_units", "unit": "ent", "count": 3}]
+    },
+    "Цурт": {
+      "text": "+2 gold when you gather gold.",
+      "text_ru": "+2 золота при добыче золота.",
+      "text_board": "+2{gold} при добыче {gold}.",
+      "effects": [{"type": "bonus_on_gather", "resource": "gold", "value": 2}]
+    },
+    "Дорталь": {
+      "text": "+1 VP at game end for every 2 visited regions.",
+      "text_ru": "+1 ПО в конце игры за каждые 2 посещённых региона.",
+      "text_board": "+1{laurel} в конце игры за каждые 2 посещённых региона.",
+      "effects": [{"type": "vp_per_visited_regions", "per": 2, "value": 1}]
+    },
+    "Золен": {
+      "text": "+3 to your total army strength in battles with monsters.",
+      "text_ru": "+3 к итоговой силе войск в сражениях с чудовищами.",
+      "text_board": "+3 к итоговой {power} войск в сражениях с чудовищами.",
+      "effects": [{"type": "battle_strength_bonus", "value": 3, "against": "monster"}]
+    },
+    "Содмур": {
+      "text": "Movement cost in mountains drops to 2.",
+      "text_ru": "Стоимость перемещения по горам снижается до 2.",
+      "text_board": "Стоимость перемещения по {mountain} снижается до 2{mp}.",
+      "effects": [{"type": "set_move_cost", "terrain": "mountain", "value": 2}]
+    },
+    "Шог Ид": {
+      "text": "You do not spend gold when constructing buildings.",
+      "text_ru": "Вы не тратите золото при строительстве зданий.",
+      "text_board": "Вы не тратите {gold} при {build} зданий.",
+      "effects": [{"type": "free_build_resource", "resource": "gold"}]
+    }
+  },
+  "notes": [
+    "Перемещение: поле 1, лес 2 (→1 Путеводный лес), горы 3 (→2 артефакт Содмура), озеро 2.",
+    "Сила после стрелки (пикси 2, грифон 5, энт 10) — только от Лавки бронника и только на одно сражение; значение на планшете не зачёркивается (правила, с. 19).",
+    "Горн и Лавка бронника работают в любом сражении: с игроками, с чудовищем, при захвате крепости.",
+    "Бонусы Горна и артефакта Золена добавляются и к нулевой силе — заявлять войска не обязательно (FAQ).",
+    "Гнездовье меняет только цену артефакта: находиться в его регионе всё равно нужно (правила, с. 19). Цены в дереве: Золен 2, Шог Ид 2, Содмур 3, Цурт 4, Таскар 5, Дорталь 6.",
+    "Лесистый утёс и Шог Ид освобождают только от оплаты зданий, не найма.",
+    "Цурт: +2 золота только при действии добычи золота.",
+    "Дорталь: стартовый регион считается посещённым, нечётный остаток отбрасывается."
+  ]
+}

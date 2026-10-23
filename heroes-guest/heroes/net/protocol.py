@@ -1,0 +1,67 @@
+"""Сетевой протокол: JSON-объекты по одному на строку поверх TCP.
+
+Клиент бывает консольным (mode "console": сервер шлёт готовый текст и просит строки ввода)
+или графическим (mode "gui": сервер шлёт состояние партии и решения в виде данных).
+
+Сервер → клиент, общее:
+  {"t": "choose", "seats": [...]}         — указанного места нет: выберите из свободных
+  {"t": "welcome", "name": ..., "text"}   — вы подключены к месту name
+  {"t": "error", "text": ...}             — отказ в подключении
+  {"t": "end", "text": ...}               — партия закончилась или прервана
+Сервер → консольный клиент:
+  {"t": "out", "text": ...}               — вывести текст
+  {"t": "in", "prompt": ...}              — запросить строку ввода (ответ — "line")
+Сервер → графический клиент (содержимое — heroes/protocol/snapshot.py):
+  {"t": "sync", "you", "static", "log", "state"}  — вся партия: при подключении и после загрузки
+  {"t": "event", "text", "state"}                  — новое событие лога и состояние после него
+  {"t": "state", "state"}                          — кто-то начал или закончил решать (state.thinking)
+  {"t": "decision", "id", "player", "kind", "text", "data", "state", "error"?}
+                                          — нужно решение (ответ — "answer"); error — прошлый ответ отклонён
+Клиент → сервер:
+  {"t": "hello", "version": 3, "name": ..., "password": ..., "mode": "console" | "gui", "avatar"?: PNG в base64}
+                                          — avatar (необязательно) хозяин рассылает всем в static["avatars"]
+  {"t": "line", "text": ...}
+  {"t": "answer", "id": ..., "answer": <JSON>}
+"""
+from __future__ import annotations
+
+import json
+import socket
+
+VERSION = 3  # 3 — фракции: особые решения и данные о них (старый клиент их не понял бы)
+MODES = ("console", "gui")
+DEFAULT_PORT = 7777
+
+
+class Connection:
+    def __init__(self, sock: socket.socket):
+        self.sock = sock
+        # Сообщения маленькие и идут вопрос-ответ: без этого каждое ждёт ~40 мс (алгоритм Нейгла).
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.reader = sock.makefile("r", encoding="utf-8", newline="\n")
+
+    def send(self, message: dict) -> None:
+        self.sock.sendall((json.dumps(message, ensure_ascii=False) + "\n").encode("utf-8"))
+
+    def recv(self) -> dict | None:
+        """Следующее сообщение или None, если соединение закрыто."""
+        line = self.reader.readline()
+        if not line:
+            return None
+        return json.loads(line)
+
+    def close(self) -> None:
+        # Сначала shutdown: он будит поток, ждущий в recv(). Закрыть reader раньше нельзя —
+        # close() ждёт его внутреннюю блокировку, которую держит readline(), то есть вечно.
+        for closer in (lambda: self.sock.shutdown(socket.SHUT_RDWR), self.reader.close, self.sock.close):
+            try:
+                closer()
+            except OSError:
+                pass
+
+
+def parse_address(text: str) -> tuple[str, int]:
+    host, _, port = text.rpartition(":")
+    if not host:
+        return text, DEFAULT_PORT
+    return host, int(port)

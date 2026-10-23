@@ -1,0 +1,166 @@
+{
+  "id": "dwarves",
+  "name": "Гномы",
+  "movement": {"field": 1, "forest": 2, "mountain": 2, "lake": 3},
+  "units": {
+    "mechanic":  {"name": "Механик", "strength": 0, "cost": {"gold": 2}, "start": 0},
+    "flyer":     {"name": "Стреколёт", "strength": 2, "cost": {"gold": 3}, "start": 2},
+    "automaton": {"name": "Автоматон", "strength": 4, "cost": {"gold": 4}, "start": 0},
+    "mechasaur": {"name": "Мехозавр", "strength": 5, "cost": {"gold": 6}, "start": 0}
+  },
+  "rules": {
+    "science": {
+      "name": "Наука",
+      "text": "After reaching 4, 9 and 14 science, build level 2, 3 and 4 buildings for free.",
+      "text_ru": "После достижения 4, 9 и 14 науки стройте здания 2, 3 и 4 уровня бесплатно.",
+      "text_board": "После достижения 4{science}, 9{science} и 14{science} стройте здания 2, 3 и 4 уровня бесплатно.",
+      "effects": [
+        {"type": "science_track", "max": 18},
+        {"type": "free_build_by_science", "thresholds": {"2": 4, "3": 9, "4": 14}}
+      ]
+    }
+  },
+  "buildings": {
+    "generator": {
+      "name": "Генератор", "level": 1, "vp": 0,
+      "cost": {"iron": 3, "gold": 2}, "requires": [],
+      "text": "Gain 1 science for each Механик in your army at the moment of construction.",
+      "text_ru": "Получите 1 науку за каждого механика в войске на момент строительства.",
+      "text_board": "Получите 1{science} за каждого механика в войске на момент строительства.",
+      "effects": [{"type": "on_built_science_per_unit", "unit": "mechanic", "value": 1}]
+    },
+    "academy": {
+      "name": "Академия", "level": 1, "vp": 0,
+      "cost": {"wood": 2, "iron": 2}, "requires": [],
+      "text": "Hire Механик. Each Механик in battle doubles the strength of 1 unit of your choice.",
+      "text_ru": "Наём механиков. Каждый механик в сражении удваивает силу 1 любой боевой единицы.",
+      "text_board": "Наём механиков. *Каждый механик в сражении удваивает {power} 1 любой боевой единицы.",
+      "effects": [
+        {"type": "hire", "unit": "mechanic"},
+        {"type": "double_unit_strength", "unit": "mechanic", "targets": 1}
+      ]
+    },
+    "gatherers": {
+      "name": "Сборщики", "level": 2, "vp": 1,
+      "cost": {"iron": 5}, "requires": [],
+      "text": "Gain 1 science and 9 resources of your choice.",
+      "text_ru": "Получите 1 науку и 9 любых ресурсов.",
+      "text_board": "Получите 1{science} и 9{any}.",
+      "effects": [{"type": "on_built_gain", "science": 1, "resources": {"any": 9}}]
+    },
+    "library": {
+      "name": "Библиотека", "level": 2, "vp": 0,
+      "cost": {"wood": 3, "iron": 2}, "requires": [],
+      "text": "During the build action you may pay 4 wood to gain 1 science.",
+      "text_ru": "При строительстве вы можете заплатить 4 дерева, чтобы получить 1 науку.",
+      "text_board": "При {build} вы можете заплатить 4{wood}, чтобы получить 1{science}.",
+      "effects": [{"type": "buy_science_on_build", "cost": {"wood": 4}, "value": 1}]
+    },
+    "manufactory": {
+      "name": "Мануфактура", "level": 2, "vp": 1,
+      "cost": {"iron": 3, "gold": 2}, "requires": ["academy"],
+      "text": "Hire Стреколёт.",
+      "text_ru": "Наём стреколётов.",
+      "text_board": "Наём стреколётов.",
+      "effects": [{"type": "hire", "unit": "flyer"}]
+    },
+    "laboratory": {
+      "name": "Лаборатория", "level": 3, "vp": 3,
+      "cost": {"iron": 4, "gold": 2}, "requires": ["gatherers"],
+      "text": "Gain 1 resource of your choice when you visit a new region.",
+      "text_ru": "Получите 1 любой ресурс при посещении нового региона.",
+      "text_board": "Получите 1{any} при посещении нового региона.",
+      "effects": [{"type": "on_new_region", "gain": {"any": 1}}]
+    },
+    "conveyor": {
+      "name": "Конвейер", "level": 3, "vp": 1,
+      "cost": {"wood": 2, "iron": 5}, "requires": ["library"],
+      "text": "-1 gold to the hire cost of units (except Механик) for every 9 science.",
+      "text_ru": "−1 золото к стоимости найма войск (кроме механиков) за каждые 9 науки.",
+      "text_board": "−1{gold} к стоимости найма войск (кроме механиков) за каждые 9{science}.",
+      "effects": [{"type": "hire_discount_per_science", "per": 9, "discount": {"gold": 1}, "except": ["mechanic"]}]
+    },
+    "workshop": {
+      "name": "Цех", "level": 3, "vp": 2,
+      "cost": {"iron": 5}, "requires": ["manufactory"],
+      "text": "Hire Автоматон. +1 science for each Автоматон hired.",
+      "text_ru": "Наём автоматонов. При найме каждого автоматона +1 наука.",
+      "text_board": "Наём автоматонов. *При найме каждого автоматона +1{science}.",
+      "effects": [
+        {"type": "hire", "unit": "automaton"},
+        {"type": "science_per_hire", "unit": "automaton", "value": 1}
+      ]
+    },
+    "bank": {
+      "name": "Банк", "level": 4, "vp": 3,
+      "cost": {"wood": 2, "iron": 5, "gold": 2}, "requires": ["conveyor"],
+      "text": "+1 VP for reaching 4, 9 and 14 science.",
+      "text_ru": "Получите 1 ПО за достижение 4, 9 и 14 науки.",
+      "text_board": "Получите 1{laurel} за достижение 4{science}, 9{science} и 14{science}.",
+      "effects": [{"type": "vp_per_science_threshold", "thresholds": [4, 9, 14], "value": 1}]
+    },
+    "factory": {
+      "name": "Фабрика", "level": 4, "vp": 5,
+      "cost": {"wood": 2, "iron": 5, "gold": 2}, "requires": ["conveyor"],
+      "text": "Hire Мехозавр. Мехозавр gets +1 strength for every 3 science.",
+      "text_ru": "Наём мехозавров. Мехозавры получают +1 к силе за каждые 3 науки.",
+      "text_board": "Наём мехозавров. *Мехозавры получают +1{power} за каждые 3{science}.",
+      "effects": [
+        {"type": "hire", "unit": "mechasaur"},
+        {"type": "strength_per_science", "unit": "mechasaur", "per": 3, "value": 1}
+      ]
+    }
+  },
+  "artifacts": {
+    "Таскар": {
+      "text": "+2 VP at game end for each of your artifacts.",
+      "text_ru": "+2 ПО в конце игры за каждый свой артефакт.",
+      "text_board": "+2{laurel} в конце игры за каждый свой {artifact}.",
+      "effects": [{"type": "vp_per_artifact", "value": 2}]
+    },
+    "Цурт": {
+      "text": "Strength of Автоматон becomes 6.",
+      "text_ru": "Сила автоматонов увеличивается до 6.",
+      "text_board": "{power} автоматонов увеличивается до 6.",
+      "effects": [{"type": "set_strength", "unit": "automaton", "value": 6}]
+    },
+    "Дорталь": {
+      "text": "Strength of Стреколёт becomes 3.",
+      "text_ru": "Сила стреколётов увеличивается до 3.",
+      "text_board": "{power} стреколётов увеличивается до 3.",
+      "effects": [{"type": "set_strength", "unit": "flyer", "value": 3}]
+    },
+    "Золен": {
+      "text": "Gain 3 science.",
+      "text_ru": "Получите 3 науки.",
+      "text_board": "Получите 3{science}.",
+      "effects": [{"type": "gain_science", "value": 3}]
+    },
+    "Содмур": {
+      "text": "Gain 9 resources of your choice.",
+      "text_ru": "Получите 9 любых ресурсов.",
+      "text_board": "Получите 9{any}.",
+      "effects": [{"type": "gain", "resources": {"any": 9}}]
+    },
+    "Шог Ид": {
+      "text": "Gain 4 Стреколёт.",
+      "text_ru": "Получите 4 стреколёта.",
+      "text_board": "Получите 4 стреколёта.",
+      "effects": [{"type": "gain_units", "unit": "flyer", "count": 4}]
+    }
+  },
+  "notes": [
+    "Перемещение: поле 1, лес 2, горы 2, озеро 3; улучшений нет.",
+    "Шкала науки 1–18; наука сверх 18 пропадает.",
+    "Бесплатная постройка по науке отменяет только стоимость; требования (стрелки) действуют. Здания 1-го уровня всегда платные (правила, с. 14).",
+    "Механик удваивает силу одной заявленной единицы с учётом её модификаций (мехозавр 5+2 → 14); одну единицу усиливает только один механик (FAQ).",
+    "Генератор и Сборщики срабатывают один раз — в момент постройки, а не в каждом строительстве.",
+    "Библиотека: не больше одного обмена 4 дерева → 1 наука за действие строительства; строить при этом ничего не обязательно.",
+    "Конвейер: скидка −1 золото на 9 науке и −2 на 18 (стреколёт 3→2→1, автоматон 4→3→2, мехозавр 6→5→4); на механиков не действует.",
+    "Фабрика: сила мехозавра = 5 + наука // 3.",
+    "Банк: в конце игры +1 ПО за каждый достигнутый порог 4/9/14 (максимум 3), в том числе достигнутый до постройки.",
+    "Фабрика требует только Конвейер.",
+    "Сборщики и Библиотека требований не имеют.",
+    "Золен (3 науки) — разовый эффект: срабатывает при каждом получении артефакта."
+  ]
+}
