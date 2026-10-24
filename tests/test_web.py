@@ -190,6 +190,10 @@ def test_silent_browser_is_dropped(monkeypatch):
         ws.send({"t": "hello", "version": VERSION, "name": "Guest", "password": "secret", "mode": "gui"})
         assert ws.recv()["t"] == "welcome"
         seat = server.seats["Guest"]
+        for _ in range(100):   # welcome уходит раньше, чем гостя сажают за место
+            if seat.conn is not None:
+                break
+            threading.Event().wait(0.01)
         conn = seat.conn
         for _ in range(100):   # не читаем кадры ping — не отвечаем на них
             if conn.closed:
