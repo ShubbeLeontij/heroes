@@ -24,6 +24,11 @@ export function mark(kind) {
   return MARK[kind] || "";
 }
 
+// артефакт региона его рисунком (marks.artifact)
+export function artifactMark(region) {
+  return MARK[`artifact_${region}`] || `${MARK.artifact || ""} ${region}`;
+}
+
 // «4{wood}» → «4» + метка дерева (тексты зданий и артефактов «как на планшете», marks.markup)
 export function markup(text) {
   return text.replace(/\{(\w+)\}/g, (all, word) => MARK[word] || all);
@@ -35,13 +40,15 @@ export function setSeatAvatar(fn) {
 }
 
 export function iconSrc(kind) {
-  return `assets/icons/${kind}_${ICON_HEIGHT}.png`;
+  return `assets/icons/${encodeURIComponent(kind)}_${ICON_HEIGHT}.png`;
 }
 
 export function icon(kind, cls = "") {
   const img = document.createElement("img");
-  img.className = `ic ic-${kind.replace(/_off$/, "")} ${cls}`.trim();
-  img.alt = "";
+  const artifact = kind.startsWith("artifact_") ? kind.slice(9) : null;   // рисунок артефакта: его регион — подсказкой
+  img.className = `ic ic-${artifact !== null ? "art" : kind.replace(/_off$/, "")} ${cls}`.trim();
+  img.alt = artifact || "";
+  if (artifact) img.title = artifact;
   img.draggable = false;
   if (kind.startsWith("avatar")) {
     img.src = seatAvatar(Number(kind.slice(6)));

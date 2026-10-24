@@ -2,7 +2,7 @@
 // которые сами перестраиваются под ширину экрана. На широком экране здания стоят колонками, как на печатном
 // планшете, со стрелками зависимостей; на узком — по две в ряд, а вместо стрелок подписано, какое здание нужно.
 
-import { UI, h, mark, markup, rich } from "./rich.js";
+import { UI, artifactMark, h, mark, markup, rich } from "./rich.js";
 import { artifactCondition, color, CONDITION_MARKS, conditionIcons, monsterLine, nameOf, res } from "./common.js";
 
 const MAX_COLUMNS = 5;
@@ -280,7 +280,7 @@ export class BoardView {
       const wood = faction.artifact_wood;
       if (wood) cond += " / " + res({ wood: wood.prices[region] });   // Гнездовье эльфов: и за дерево, через «/»
       const card = h("div.card.artifact" + (holder !== undefined ? ".held" : ""), h("b.cond", cond),
-        h("img.artifact-picture", { src: picture(`artifact_${region}`), alt: region, draggable: false }),
+        h("img.artifact-picture", { src: picture(`artifact_${region}`), alt: region, title: region, draggable: false }),
         h("p", markup(board[region])), h("small.status" + (holder !== undefined ? ".bold" : ".muted"), status));
       if (holder !== undefined) card.style.setProperty("--holder", color(holder));
       return card;
@@ -317,7 +317,7 @@ export class BoardView {
 // насколько игрок выполнил условие артефакта (boardview.condition_progress)
 export function conditionProgress(static_, state, p, region) {
   const pl = state.players[p], holder = state.artifact_holder[region];
-  if (holder === p) return `${mark("artifact")} взят`;
+  if (holder === p) return `${artifactMark(region)} взят`;
   const cond = artifactCondition(static_, pl.faction, region), kind = cond.condition;
   let have, need;
   if (kind === "pay") {
@@ -385,8 +385,8 @@ export function playersSummary(static_, state, you, onOpen) {
     }),
     table("Крепости и артефакты", [h("th", { title: "Победы в сражениях" }, mark("victory")), h("th", "Захваченные крепости"), h("th", "Артефакты")],
       (pl) => [String(pl.victories), pl.fortresses.join(", ") || "—",
-        pl.artifacts.length ? h("span.art-list", pl.artifacts.map((r) => h("span", h("img.ic.art", { src: picture(`artifact_${r}`), alt: "" }), r))) : "—"]),
-    table("Условия артефактов", artifacts.map(([r, a]) => h("th.art-head", h("img.ic.art", { src: picture(`artifact_${r}`), alt: "" }),
-      h("div", r), h("small", conditionIcons(a)))), (pl, p) => artifacts.map(([r]) => conditionProgress(static_, state, p, r))),
+        pl.artifacts.length ? h("span.art-list", pl.artifacts.map((r) => h("span", h("img.ic.art", { src: picture(`artifact_${r}`), alt: r, title: r })))) : "—"]),
+    table("Условия артефактов", artifacts.map(([r, a]) => h("th.art-head", h("img.ic.art", { src: picture(`artifact_${r}`), alt: r, title: r }),
+      h("small", conditionIcons(a)))), (pl, p) => artifacts.map(([r]) => conditionProgress(static_, state, p, r))),
     h("p.muted.small", "Тап по строке — планшет и карта игрока."));
 }

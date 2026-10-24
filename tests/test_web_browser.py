@@ -171,7 +171,7 @@ def test_summary_helpers(browser):
         ["B.conditionProgress(S, st, 0, 'Цурт')", f"13/12{M['iron']} ✓"],
         ["B.conditionProgress(S, st, 0, 'Шог Ид')", f"1/4{M['mountain']}"],
         ["B.conditionProgress(S, st, 1, 'Содмур')", f"5/5{M['victory']} ✓"],
-        ["B.conditionProgress(S, held, 1, 'Содмур')", f"{M['artifact']} взят"],
+        ["B.conditionProgress(S, held, 1, 'Содмур')", f"{M['artifact_Содмур']} взят"],
         ["B.conditionProgress(S, held, 0, 'Содмур')", f"0/5{M['victory']}"],
         ["B.conditionProgress(S, st, 2, 'Цурт')", f"2/3{M['krak']}"],
         ["B.conditionProgress(S, st, 2, 'Шог Ид')", f"2/4{M['mountain']}"],

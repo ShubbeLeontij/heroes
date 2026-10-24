@@ -49,6 +49,7 @@ h2 { font-size: 1.05rem; }
 /* значки в тексте (rich.js): высотой со строку */
 img.ic { height: 1.15em; width: auto; vertical-align: -0.2em; margin: 0 1px; }
 img.ic-shield, img.ic-avatar { height: 1.45em; vertical-align: -0.35em; }
+img.ic-art { height: 1.6em; vertical-align: -0.45em; }
 img.ic-avatar { border-radius: 50%; margin-right: 3px; }
 img.ic.big { height: 40px; vertical-align: middle; }
 
@@ -501,7 +502,7 @@ table.army-table td.num, table.form-table td.num { text-align: center; }
 .art-head { text-align: center !important; min-width: 7em; }
 .art-head small { font-weight: normal; display: block; }
 img.ic.art { height: 28px; }
-.art-list { display: flex; flex-direction: column; gap: 2px; }
+.art-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .join-title { display: flex; align-items: center; gap: 12px; }
 .join-title img { width: 56px; height: 56px; border-radius: 12px; }
 .panel .note.muted { font-size: 0.9em; }

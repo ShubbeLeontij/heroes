@@ -12,7 +12,7 @@ import ast
 import re
 
 from .common import res
-from .marks import MARKS as M
+from .marks import MARKS as M, artifact
 
 ACTION_MARKS = {"gather wood": M["wood"], "gather iron": M["iron"], "gather gold": M["gold"], "move": M["move"],
                 "build & hire": M["build"]}   # значки действий из памятки: конь — перемещение, молот — строительство
@@ -61,7 +61,7 @@ REASONS = [
     (r"(gather (?:wood|iron|gold)) raised by (.+)", lambda m: f"{reason(m[1])} повышена: {reason(m[2])}"),
     (r"paid by (.+)", lambda m: f"плата от игрока {m[1]}"),
     (r"the curse of (.+)", lambda m: f"проклятие региона {m[1]}"),
-    (r"(.+) artifact", lambda m: f"артефакт {m[1]}"),
+    (r"(.+) artifact", lambda m: artifact(m[1])),
 ]
 
 
@@ -89,6 +89,11 @@ def _res_gain(t, m):
     return f"{m['n']} получает: {resources(m['res'])} ({reason(m['why'])})"
 
 
+def _reserved(obj: str, region: str) -> str:
+    """Что забронировано: артефакт — его рисунком, остальное — значком объекта и регионом."""
+    return artifact(region) if obj == "artifact" else f"{OBJECTS.get(obj, obj)} в регионе {region}"
+
+
 def _side(side: str) -> str:
     """Сторона сражения: «Боря — strength 5», «Аня's Гидра — strength 18» → сила значком."""
     m = re.fullmatch(r"(.+?)'s (\S+) — strength (\d+)", side) or re.fullmatch(r"(.+)() — strength (\d+)", side)
@@ -109,7 +114,7 @@ RULES = [
         r"(\d+)\. ([a-z& ]+?)(?=, \d+\.|$)", lambda x: f"{x[1]}. {ACTION_MARKS.get(x[2], x[2])}", m["a"])),
     (NAME + r" starts in (?P<r>.+)", lambda t, m: f"{m['n']} начинает в регионе {m['r']}"),
     (NAME + r" gains the (?P<r>.+?) artifact: (?P<x>.+)",
-     lambda t, m: f"{m['n']} получает артефакт {m['r']}: {t.artifacts.get(m['x'], m['x'])}"),
+     lambda t, m: f"{m['n']} получает {artifact(m['r'])}: {t.artifacts.get(m['x'], m['x'])}"),
     (NAME + r" gains " + RES + r" \((?P<why>.+)\)", _res_gain),
     (NAME + r" reached (?P<t>\d+) (?P<r>wood|iron|gold|rage) — (?P<vp>\d+) VP circled",
      lambda t, m: f"{m['n']}: на складе {m['t']}{M[m['r']]} — обведено {m['vp']}{M['laurel']}"),
@@ -127,7 +132,7 @@ RULES = [
      lambda t, m: f"{m['n']} побеждает: чудовище обведено, но наград нет"),
     (NAME + r" wins", lambda t, m: f"{m['n']} побеждает"),
     (NAME + r" takes the monster's loot", lambda t, m: f"{m['n']} берёт награду обведённого чудовища"),
-    (NAME + r" takes the (?P<a>.+) artifact from (?P<q>.+)", lambda t, m: f"{m['n']} отбирает артефакт {m['a']} у игрока {m['q']}"),
+    (NAME + r" takes the (?P<a>.+) artifact from (?P<q>.+)", lambda t, m: f"{m['n']} отбирает {artifact(m['a'])} у игрока {m['q']}"),
     (NAME + r" takes from (?P<q>.+): " + RES, lambda t, m: f"{m['n']} забирает у игрока {m['q']}: {resources(m['res'])}"),
     (HYDRA + r" attacks the fortress in (?P<r>.+) with strength (?P<s>\d+) and fails",
      lambda t, m: f"{m['h']} игрока {m['n']} штурмует крепость в регионе {m['r']}: {m['s']}{M['power']} — неудачно"),
@@ -149,7 +154,7 @@ RULES = [
      lambda t, m: f"{m['n']} возводит здание на фундаменте в регионе {m['r']} ({m['l']}{M['laurel']})"),
     (NAME + r" hires: (?P<u>.+)", lambda t, m: f"{m['n']} нанимает: {m['u']}"),
     (NAME + r" reserves the (?P<o>\w+) in (?P<r>.+) with Башня иллюзий",
-     lambda t, m: f"{m['n']} бронирует {OBJECTS.get(m['o'], m['o'])} в регионе {m['r']} (Башня иллюзий)"),
+     lambda t, m: f"{m['n']} бронирует {_reserved(m['o'], m['r'])} (Башня иллюзий)"),
     (r"⚠ " + NAME + r": no valid answer to '(?P<k>\w+)', the default was used",
      lambda t, m: f"⚠ {m['n']}: нет допустимого ответа ({m['k']}), выбран вариант по умолчанию"),
     (NAME + r": (?P<vp>\d+) VP \{(?P<d>.*)\}", _score),
@@ -222,7 +227,7 @@ POPUPS = [   # (шаблон, чья фишка, подпись); гидры —
     (HYDRA + r" fought alone: the monster's loot is lost", "hydra", lambda m: "Добыча теряется"),
     (HYDRA + r" in (?P<r>.+) dies: a new one is summoned", "hydra", lambda m: "Погибает — призвана новая"),
     (HYDRA + r" dies", "hydra", lambda m: "Погибает"),
-    (NAME + r" gains the (?P<r>.+?) artifact: (?P<x>.+)", "player", lambda m: f"{M['artifact']} {m['r']}"),
+    (NAME + r" gains the (?P<r>.+?) artifact: (?P<x>.+)", "player", lambda m: artifact(m["r"])),
     (NAME + r" gains " + RES + r" \((?P<why>.+)\)", "player", lambda m: _gain(m["res"])),
     (NAME + r" reached (?P<t>\d+) (?P<r>wood|iron|gold|rage) — (?P<vp>\d+) VP circled", "player",
      lambda m: f"{m['t']}{M[m['r']]}: обведено {m['vp']}{M['laurel']}"),
@@ -230,7 +235,7 @@ POPUPS = [   # (шаблон, чья фишка, подпись); гидры —
     (NAME + r" wins: a monster is circled, but there are no rewards", "player", lambda m: "Победа (без наград)"),
     (NAME + r" wins", "player", lambda m: "Победа!"),
     (NAME + r" takes the monster's loot", "player", lambda m: "Награда чудовища"),
-    (NAME + r" takes the (?P<a>.+) artifact from (?P<q>.+)", "player", lambda m: f"{M['artifact']} {m['a']} — у {m['q']}"),
+    (NAME + r" takes the (?P<a>.+) artifact from (?P<q>.+)", "player", lambda m: f"{artifact(m['a'])} — у {m['q']}"),
     (NAME + r" takes from (?P<q>.+): " + RES, "player", lambda m: f"{_gain(m['res'])} — у {m['q']}" if _gain(m["res"]) else ""),
     (NAME + r" attacks the fortress in (?P<r>.+) with strength (?P<s>\d+) and fails", "player",
      lambda m: f"Штурм не удался: {m['r']}"),
@@ -244,7 +249,8 @@ POPUPS = [   # (шаблон, чья фишка, подпись); гидры —
     (NAME + r" places the building on the foundation in (?P<r>.+) \((?P<l>\d+) VP\)", "player",
      lambda m: f"{M['foundation']} {m['r']}: {m['l']}{M['laurel']}"),
     (NAME + r" hires: (?P<u>.+)", "player", lambda m: m["u"]),
-    (NAME + r" reserves the (?P<o>\w+) in (?P<r>.+) with Башня иллюзий", "player", lambda m: f"Бронь: {m['r']}"),
+    (NAME + r" reserves the (?P<o>\w+) in (?P<r>.+) with Башня иллюзий", "player",
+     lambda m: f"Бронь: {artifact(m['r']) if m['o'] == 'artifact' else m['r']}"),
     (NAME + r" gains (?P<k>\d+) science \((?P<why>.+)\), now (?P<x>\d+)", "player", lambda m: f"+{m['k']}{M['science']}"),
     (NAME + r" upgrades (?P<u>.+) ×(?P<k>\d+) to (?P<v>.+)", "player", lambda m: f"{m['u']} → {m['v']} ×{m['k']}"),
     (NAME + r" exchanges (?P<k>\d+) (?P<r>wood|iron|gold) for (?P<u>.+) \((?P<s>.+)\)", "player",

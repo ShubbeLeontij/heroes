@@ -2,7 +2,7 @@
 // (повторяет effects.army_strength движка). Страница работает только с данными снимков
 // (static и state из heroes/protocol/snapshot.py), без движка.
 
-import { UI, mark } from "./rich.js";
+import { UI, artifactMark, mark } from "./rich.js";
 
 export const color = (p) => (p === null || p === undefined ? "var(--muted)" : UI.colors[p % UI.colors.length]);
 
@@ -108,7 +108,7 @@ export function objectText(static_, state, region, faction = null) {
     text = `крепость ${f.strength}${mark("shield")} → ${reward(f.vp, f.loot)}`;
     if (region in state.fortress_owner) text += `; захвачена: ${nameOf(static_, state.fortress_owner[region])}`;
   } else if (obj === "artifact") {
-    text = `${mark("artifact")} ${conditionIcons(faction ? artifactCondition(static_, faction, region) : r.artifact)}`;
+    text = `${artifactMark(region)} ${conditionIcons(faction ? artifactCondition(static_, faction, region) : r.artifact)}`;
     if (region in state.artifact_holder) text += `; у игрока ${nameOf(static_, state.artifact_holder[region])}`;
   } else if (obj === "foundation") {
     const levels = state.players.map((pl, p) => (pl.foundations[region] ? `${nameOf(static_, p)} ${UI.levels[pl.foundations[region]]}` : null))

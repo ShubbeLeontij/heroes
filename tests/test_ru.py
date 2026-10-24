@@ -68,6 +68,19 @@ def test_icons_in_log():
     assert reason("gather iron") == f"добыча {M['iron']}"
 
 
+def test_artifacts_by_picture():
+    """Артефакт в журнале и табличках — его рисунком с карты, а не названием региона."""
+    t = Translator()
+    tsurt = M["artifact_Цурт"]
+    assert t.line("Аня gains the Цурт artifact: some effect") == f"Аня получает {tsurt}: some effect"
+    assert t.line("Аня takes the Цурт artifact from Боря") == f"Аня отбирает {tsurt} у игрока Боря"
+    assert t.line("Аня reserves the artifact in Цурт with Башня иллюзий") == f"Аня бронирует {tsurt} (Башня иллюзий)"
+    assert t.line("Аня reserves the portal in Флисс with Башня иллюзий") == \
+        f"Аня бронирует {M['portal']} в регионе Флисс (Башня иллюзий)"
+    assert reason("Шог Ид artifact") == M["artifact_Шог Ид"]
+    assert popup(["Аня", "Боря"], "Аня takes the Цурт artifact from Боря") == (("player", 0), f"{tsurt} — у Боря")
+
+
 def test_names_with_faction():
     static = {"names": ["Аня", "Боря"], "player_factions": ["humans", "nagas"],
               "factions": {"humans": {"name": "Люди"}, "nagas": {"name": "Наги"}}}

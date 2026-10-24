@@ -4,7 +4,7 @@
 // Для пальцев: счётчики — с кнопками «−/+», регионы — списком крупных строк (и тапом по карте),
 // порядок действий — тапами (на ПК — и перетаскиванием).
 
-import { UI, h, icon, mark, rich } from "./rich.js";
+import { UI, artifactMark, h, icon, mark, rich } from "./rich.js";
 import { armyStrength, artifactText, buildingText, nameOf, objectText, plural, res, reward, terrainOf,
   upgradeGains } from "./common.js";
 
@@ -772,7 +772,8 @@ class ReserveObject extends RegionChoice {
     this.note(`Можно заплатить (${res(this.data.cost)}), чтобы объект в одном регионе — крепость, `
       + "артефакт, портал или фундамент — стал доступен только вам. Можно отказаться.");
     const labels = Object.fromEntries(options.map((r) => [r, `${r}: ${this.object(r)}`]));
-    const badges = Object.fromEntries(options.map((r) => [r, UI.glyphs[this.data.options[r]] || UI.objects[this.data.options[r]] || ""]));
+    const badges = Object.fromEntries(options.map((r) => [r, this.data.options[r] === "artifact" ? artifactMark(r)
+      : UI.glyphs[this.data.options[r]] || UI.objects[this.data.options[r]] || ""]));
     this.ok = this.button("Забронировать", () => this.confirm(), true);
     this.ok.disabled = true;
     this.button("Отказаться", () => this.send(null));
@@ -905,10 +906,10 @@ class ChooseReward extends Panel {
     }
     this.artifact = null;
     if ("artifact" in opts) {
-      this.kind.add("artifact", "Отобрать артефакт:");
+      this.kind.add("artifact", `Отобрать ${mark("artifact")}:`);
       const rows = [];
       for (const [q, arts] of Object.entries(opts.artifact)) {
-        for (const a of arts) rows.push([JSON.stringify([q, a]), `${a} (у игрока ${this.name(q, true)})`]);
+        for (const a of arts) rows.push([JSON.stringify([q, a]), `${artifactMark(a)} (у игрока ${this.name(q, true)})`]);
       }
       this.artifact = new Radios(rows, () => {
         this.kind.set("artifact", false);
@@ -1050,7 +1051,7 @@ class FightMonster extends Panel {
 
 class TakeArtifact extends Panel {
   heading() {
-    return `Артефакт в регионе ${this.data.region}`;
+    return `Взять ${artifactMark(this.data.region)}?`;
   }
 
   build() {
