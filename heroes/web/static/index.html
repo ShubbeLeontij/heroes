@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#3b2a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Герои">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="static/manifest.webmanifest">
+<link rel="icon" href="static/icon-192.png">
+<link rel="apple-touch-icon" href="static/icon-192.png">
+<link rel="stylesheet" href="static/style.css">
+<title>«Герои»</title>
+</head>
+<body>
+
+<!-- подключение к партии хозяина -->
+<section id="join">
+  <form id="join-form" class="card" autocomplete="on">
+    <div class="join-title"><img src="static/icon-192.png" alt="" width="56" height="56"><h1>«Герои»</h1></div>
+    <p class="muted">Партия на компьютере <b id="join-host"></b></p>
+    <div class="avatar-row">
+      <img id="join-avatar" alt="Аватарка" width="72" height="72">
+      <div>
+        <label class="file-button">Своя аватарка<input id="join-photo" type="file" accept="image/*"></label>
+        <button id="join-photo-clear" type="button" class="link hidden">убрать</button>
+      </div>
+    </div>
+    <label>Имя (место за столом)
+      <input id="join-name" name="name" autocomplete="nickname" placeholder="как назвал вас хозяин" maxlength="40">
+    </label>
+    <label>Пароль партии
+      <input id="join-password" name="password" type="password" autocomplete="current-password" placeholder="если хозяин его задал">
+    </label>
+    <button id="join-submit" class="primary" type="submit">Подключиться</button>
+    <p id="join-status" class="muted"></p>
+    <div id="join-seats"></div>
+    <p id="join-error" class="bad hidden"></p>
+  </form>
+</section>
+
+<!-- партия -->
+<section id="game">
+  <header id="bar">
+    <span id="round"></span>
+    <span id="phases"></span>
+    <span id="status"></span>
+    <button id="log-toggle" type="button">События <span class="unread hidden"></span></button>
+  </header>
+  <div id="order"></div>
+  <div id="banner" class="hidden"></div>
+  <main id="main">
+    <section id="map-pane"><div id="map"></div></section>
+    <section id="decision-pane"><div id="decision"></div></section>
+    <section id="boards-pane">
+      <nav id="board-tabs"></nav>
+      <div id="board"></div>
+    </section>
+    <section id="log-pane">
+      <div class="log-head"><h2>События партии</h2><button id="log-close" type="button" aria-label="Закрыть">✕</button></div>
+      <div id="log"></div>
+    </section>
+  </main>
+  <nav id="tabs">
+    <button type="button" data-view="map">Карта</button>
+    <button type="button" data-view="decision">Решение<span class="dot"></span></button>
+    <button type="button" data-view="boards">Планшеты</button>
+    <button type="button" data-view="log">Журнал <span class="unread hidden"></span></button>
+  </nav>
+</section>
+
+<script type="module" src="static/js/main.js"></script>
+</body>
+</html>

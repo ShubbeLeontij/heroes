@@ -45,10 +45,11 @@ def test_build_decision_message_is_json():
 
 
 def gui_client(port: int, name: str, answers_from: RandomBot, received: list, leave_after: int | None = None,
-               avatar: str | None = None) -> None:
+               avatar: str | None = None, connect=None) -> None:
     """Графический клиент без окна: на каждое решение отвечает ботом по присланным данным.
-    leave_after — оборвать связь, не ответив на столько-то решений (и вернуть управление); avatar — своя аватарка."""
-    conn = Connection(socket.create_connection(("127.0.0.1", port)))
+    leave_after — оборвать связь, не ответив на столько-то решений (и вернуть управление); avatar — своя аватарка;
+    connect(port) — своё соединение (по умолчанию TCP, как у окна; test_web — WebSocket, как у браузера)."""
+    conn = connect(port) if connect else Connection(socket.create_connection(("127.0.0.1", port)))
     hello = {"t": "hello", "version": VERSION, "name": name, "password": "secret", "mode": "gui"}
     if avatar:
         hello["avatar"] = avatar

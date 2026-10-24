@@ -240,6 +240,7 @@ def open_table(game: Game, server: Server, args: argparse.Namespace, out: Callab
     for address in local_addresses():
         out(f"  python -m heroes --join {address}{port}{password} --name <name>")
     out(f"  (or open the graphical client: python -m heroes --gui → Join, address {local_addresses()[0]}{port})")
+    out(f"  (or open http://{local_addresses()[0]}:{server.port} in a browser — on a phone, tablet or computer)")
     out("Seats: " + ", ".join(server.seats) + ". Over the internet you need to forward port "
         f"{server.port} or share a VPN network (e.g. Tailscale).")
     try:

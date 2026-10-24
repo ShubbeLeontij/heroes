@@ -4,6 +4,8 @@
 ввод и вывод идут через Seat, либо графический клиент, которому решения приходят данными.
 Если соединение рвётся, партия ждёт, пока игрок подключится снова, и повторяет ему
 текущий вопрос. Переподключиться можно и другим клиентом (консольным вместо графического).
+На тот же порт заходит и браузер (web.py): он получает страницу веб-клиента, а её WebSocket
+садится за место как графический клиент.
 """
 from __future__ import annotations
 
@@ -13,6 +15,7 @@ import time
 from collections import deque
 from typing import Callable
 
+from . import web
 from .protocol import MODES, VERSION, Connection
 
 RECENT = 60  # сколько последних сообщений повторить игроку после переподключения
@@ -41,7 +44,8 @@ class Seat:
 
     @property
     def connected(self) -> bool:
-        return self.conn is not None
+        # браузер (web.py) сам знает, что его соединение закрылось: место свободно, не дожидаясь отправки
+        return self.conn is not None and not getattr(self.conn, "closed", False)
 
     def attach(self, conn: Connection, mode: str = "console") -> None:
         """Посадить игрока за место. Консольному клиенту при переподключении повторить последние
@@ -150,8 +154,14 @@ class Server:
         return [name for name, seat in self.seats.items() if not seat.connected]
 
     def _handshake(self, sock: socket.socket, addr) -> None:
-        conn = Connection(sock)
         sock.settimeout(120)
+        try:   # браузер: страница и картинки, а запрос /ws — такое же соединение, как у графического клиента
+            conn = web.accept(sock) if web.is_http(sock) else Connection(sock)
+        except OSError:
+            sock.close()
+            return
+        if conn is None:
+            return
         try:
             hello = conn.recv()
             while True:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 from ..profiles import winners
-from .icons import MARKS
+from .marks import MARKS
 
 PLAYER_COLORS = ["#d64545", "#2f6fd6", "#2e9e4f", "#d98a0b"]
 TERRAIN_NAMES = {"field": "поле", "forest": "лес", "mountain": "горы", "lake": "озеро"}

@@ -12,7 +12,7 @@ import ast
 import re
 
 from .common import res
-from .icons import MARKS as M
+from .marks import MARKS as M
 
 RESOURCES = {"wood": "дерево", "iron": "железо", "gold": "золото", "any": "любой", "rage": "ярость", "Крак": "крак",
              "science": "наука"}
@@ -212,6 +212,8 @@ RULES = [
      lambda t, m: "Партия открыта для сетевых игроков. Им нужно выполнить:"),
     (r"  \(or open the graphical client: python -m heroes --gui → Join, address (?P<a>.+)\)",
      lambda t, m: f"  (или в окне: python -m heroes --gui → «Подключиться к сетевой партии», адрес {m['a']})"),
+    (r"  \(or open (?P<u>http://\S+) in a browser — on a phone, tablet or computer\)",
+     lambda t, m: f"  (или откройте {m['u']} в браузере — на телефоне, планшете или компьютере)"),
     (r"Seats: (?P<s>.+)\. Over the internet you need to forward port (?P<p>\d+) or share a VPN network \(e\.g\. Tailscale\)\.",
      lambda t, m: f"Места: {m['s']}. Через интернет нужен проброс порта {m['p']} или общая VPN-сеть (например, Tailscale)."),
     (r"Game not started\.", lambda t, m: "Партия не начата."),

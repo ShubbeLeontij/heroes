@@ -6,7 +6,7 @@ common.res() записывает ресурс не буквой, а метко�
 в фигурных скобках — «4{wood}», — markup() превращает их в метки. Всё, что выводит такие
 строки, рисует вместо меток картинки: на холсте — canvas_text() (умеет и переносить строки),
 в панелях — RichLabel и rich_radio(). Картинки (готовит tools/build_icons.py) лежат
-в assets/icons в нескольких высотах: берётся ближайшая не выше нужной.
+в assets/icons в нескольких высотах: берётся ближайшая не выше нужной. Сами метки — в marks.py (без tkinter).
 Ярость, наука и краки — тоже ресурсы: common.res() пишет их такими же метками ({rage}, {science}, {krak}).
 Метки avatar0–avatar3 — аватарки мест за столом (avatars.seat()): common.name_of(…, avatar=True)
 ставит такую метку перед именем игрока.
@@ -20,26 +20,13 @@ from tkinter import font as tkfont
 from tkinter import ttk
 
 from . import avatars
+from .marks import AVATARS, CLASS, KINDS, MARKS, NAMES, SPLIT, TOKEN, has_icons, markup, segments  # noqa: F401
 
 ASSETS = Path(__file__).resolve().parent / "assets" / "icons"
-NAMES = ["wood", "iron", "gold", "any", "shield", "laurel", "forest", "field", "lake", "mountain",
-         "wood_off", "iron_off", "gold_off", "any_off", "mp", "build", "power", "artifact", "foundation", "victory",
-         "modify", "avatar0", "avatar1", "avatar2", "avatar3",
-         "science", "rage", "note", "krak", "curse", "hydra"]   # особенности фракций (из памятки и правил)
-MARKS = {name: chr(0xE100 + i) for i, name in enumerate(NAMES)}   # _off — бледные ресурсы
-KINDS = {mark: kind for kind, mark in MARKS.items()}
-CLASS = "[" + "".join(MARKS.values()) + "]"
-SPLIT = re.compile(f"({CLASS})")
-TOKEN = re.compile(r"\{(\w+)\}")
+
 _heights: dict[str, list[int]] = {}
 GAP = 2   # просвет после иконки
-AVATARS = {f"avatar{p}" for p in range(4)}
 SCALE = {"shield": 1.3} | dict.fromkeys(AVATARS, 1.3)   # щит с мечами крупнее строки, как на планшете; аватарки тоже
-
-
-def markup(text: str) -> str:
-    """«4{wood}» → «4» + метка дерева (неизвестное слово в скобках остаётся как есть)."""
-    return TOKEN.sub(lambda m: MARKS.get(m[1], m[0]), text)
 
 
 def heights(kind: str) -> list[int]:
@@ -48,15 +35,6 @@ def heights(kind: str) -> list[int]:
         _heights[kind] = sorted(int(p.stem[len(kind) + 1:]) for p in ASSETS.glob(f"{kind}_*.png")
                                 if p.stem[len(kind) + 1:].isdigit())
     return _heights[kind]
-
-
-def has_icons(text: str) -> bool:
-    return bool(SPLIT.search(text))
-
-
-def segments(text: str) -> list[str]:
-    """Текст и метки по очереди: «2», метка, « 1», метка…"""
-    return [s for s in SPLIT.split(text) if s]
 
 
 def icon(widget: tk.Misc, kind: str, height: int) -> tk.PhotoImage:
