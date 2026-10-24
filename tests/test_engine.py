@@ -1,8 +1,12 @@
 """Минимальные проверки этапов 0–3. Подробные проверки правил — позже."""
+import threading
+import time
+
 import pytest
 
 from heroes.engine import actions, combat, movement, scoring
 from heroes.engine.data import load_faction, load_map
+from heroes.engine.decisions import Decision
 from heroes.engine.game import Game
 from heroes.engine.movement import reachable
 from heroes.players.random_bot import RandomBot
@@ -134,3 +138,31 @@ def test_random_games_complete(n):
         assert game.state.round == 16 and len(scores) == n
         assert all(not b.invalid for b in bots)
         assert all(v >= 0 for p in game.state.players for v in [*p.resources.values(), *p.units.values()])
+
+
+def test_ctrl_c_does_not_wait_for_players_thinking_in_threads():
+    """Ctrl+C во время тайных решений: партия не ждёт игрока, который думает в потоке (браузер молчит,
+    Claude перезапускается), и просит фоновые потоки не начинать новых дел."""
+    release = threading.Event()
+
+    class Silent(RandomBot):
+        parallel_safe = True
+
+        def decide(self, decision, view):
+            release.wait(30)
+            return decision.default
+
+    class Host(RandomBot):
+        def decide(self, decision, view):
+            raise KeyboardInterrupt
+
+    game = Game([Silent(0), Host(1)])
+    decisions = [Decision("x", p, "", {}, lambda answer: None, None) for p in (0, 1)]
+    started = time.monotonic()
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            game.ask_all(decisions)
+        assert time.monotonic() - started < 5
+        assert game.stopping.is_set()
+    finally:
+        release.set()

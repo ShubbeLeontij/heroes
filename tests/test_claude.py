@@ -4,6 +4,8 @@ import random
 import shutil
 import subprocess
 
+import pytest
+
 from heroes import cli
 from heroes.engine.game import Game
 from heroes.players.claude_cli import ClaudeError, ClaudePlayer
@@ -373,3 +375,14 @@ def test_engine_error_goes_only_to_its_question():
     claude.on_invalid(start[1], "Нокс", "Not a valid option")
     claude.decide(start[1], GameView(game, 0))
     assert "YOUR PREVIOUS ANSWER WAS REJECTED: Not a valid option" in claude.prompts[-1]
+
+
+def test_claude_is_not_restarted_after_ctrl_c():
+    """Ctrl+C убивает и процесс claude; поток Claude-игрока не запускает его снова, а сразу сдаётся."""
+    game = Game([RandomBot(0), RandomBot(1)])
+    claude = ClaudePlayer(transcript_dir=None, tools=False)
+    claude.binary = "/bin/false"
+    claude.game = game
+    game.stopping.set()
+    with pytest.raises(ClaudeError, match="stopping"):
+        claude.call("prompt", schemas.RESPONSE_SCHEMA, None)

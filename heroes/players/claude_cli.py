@@ -365,6 +365,8 @@ class ClaudePlayer(Player):
     def call(self, prompt: str, schema: dict, system: str | None) -> dict:
         if not self.binary:
             raise ClaudeError("The claude executable (Claude Code CLI) was not found")
+        if self.game is not None and self.game.stopping.is_set():   # Ctrl+C убил прошлый вызов — не повторять
+            raise ClaudeError("the game is stopping")
         self.workdir.mkdir(parents=True, exist_ok=True)
         tools = self.workspace.cli_args() if self.workspace else ["--tools", ""]
         cmd = [self.binary, "-p", "--model", self.model, *tools, "--strict-mcp-config",

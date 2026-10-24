@@ -21,7 +21,6 @@ import shutil
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from functools import cache
 from typing import Callable
 from urllib.parse import quote
@@ -29,7 +28,7 @@ from urllib.parse import quote
 from . import profiles, savegame
 from .engine import scoring
 from .engine.data import DATA_DIR
-from .engine.game import Game
+from .engine.game import Background, Game
 from .net.protocol import DEFAULT_PORT
 from .net.server import Server, local_addresses
 from .players.base import Player
@@ -383,8 +382,12 @@ def record_lessons(game: Game, out: Callable[[str], None] = print,
         except OSError as e:
             out(f"Could not record the result in {journal.root() / 'results.csv'}: {e}")
     out("Claude players are reviewing the game for their strategy notes…")
-    with ThreadPoolExecutor(len(claudes)) as pool:
-        results = list(pool.map(lambda c: c[1].reflect(game, c[0]), claudes))
+    workers = [Background(lambda p=p, player=player: player.reflect(game, p), f"reflect-{p}") for p, player in claudes]
+    try:
+        results = [worker.result() for worker in workers]
+    except KeyboardInterrupt:
+        game.stopping.set()
+        raise
     for (p, _), result in zip(claudes, results):
         if result:
             review, outcome = result

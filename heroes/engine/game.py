@@ -5,7 +5,6 @@ import threading
 import uuid
 from collections import deque
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Collection, Sequence
 
 from . import actions, movement, scoring
@@ -14,6 +13,31 @@ from .decisions import Decision, check_choice
 from .state import ACTION_NAMES, ACTIONS, ROUNDS, GameState, PlayerState
 from .. import savegame
 from ..players.base import Player
+
+
+class Background:
+    """Вызов в фоновом потоке-демоне. В отличие от ThreadPoolExecutor, ни Ctrl+C, ни выход из программы
+    не ждут поток, который завис в ожидании ответа (браузер не отвечает, Claude перезапускается)."""
+
+    def __init__(self, call: Callable[[], Any], name: str = "background"):
+        self.done = threading.Event()
+        self.value: Any = None
+        self.error: BaseException | None = None
+        threading.Thread(target=self._run, args=(call,), daemon=True, name=name).start()
+
+    def _run(self, call: Callable[[], Any]) -> None:
+        try:
+            self.value = call()
+        except BaseException as e:   # noqa: BLE001 — ошибку поднимет result() в ждущем потоке
+            self.error = e
+        finally:
+            self.done.set()
+
+    def result(self) -> Any:
+        self.done.wait()
+        if self.error is not None:
+            raise self.error
+        return self.value
 
 
 class GameView:
@@ -84,6 +108,8 @@ class Game:
         self.reach: dict[int, dict[str, int]] = {}
         # свои аватарки игроков (место -> PNG в base64) — только для окон, в сохранение не попадают
         self.avatars: dict[int, str] = {}
+        # хозяин остановил партию (Ctrl+C): фоновые потоки не начинают новых долгих дел (Claude не перезапускается)
+        self.stopping = threading.Event()
 
     # --- служебное ------------------------------------------------------------------------
 
@@ -124,13 +150,16 @@ class Game:
             groups.setdefault(d.player, []).append(d)
         parallel = [p for p in groups if getattr(self.players[p], "parallel_safe", False)]
         answers: dict[int, Any] = {}
-        with ThreadPoolExecutor(max_workers=max(1, len(parallel))) as pool:
-            futures = {p: pool.submit(self._answer_together, groups[p]) for p in parallel}
+        workers = {p: Background(lambda ds=groups[p]: self._answer_together(ds), f"player-{p}") for p in parallel}
+        try:
             for p, ds in groups.items():
-                if p not in futures:
+                if p not in workers:
                     answers.update(zip(map(id, ds), self._answer_together(ds)))
-            for p, future in futures.items():
-                answers.update(zip(map(id, groups[p]), future.result()))
+            for p, worker in workers.items():
+                answers.update(zip(map(id, groups[p]), worker.result()))
+        except KeyboardInterrupt:
+            self.stopping.set()
+            raise
         for d in asked:
             self._record(d, answers[id(d)])
         return [self._forced(d) if d.forced else answers[id(d)] for d in decisions]
