@@ -3,7 +3,8 @@
 // планшете, со стрелками зависимостей; на узком — по две в ряд, а вместо стрелок подписано, какое здание нужно.
 
 import { UI, artifactMark, h, mark, markup, rich } from "./rich.js";
-import { artifactCondition, color, CONDITION_MARKS, conditionIcons, monsterLine, nameOf, res } from "./common.js";
+import { artifactCondition, color, CONDITION_MARKS, conditionIcons, monsterLine, nameOf, res, reward } from "./common.js";
+import { tipAttr } from "./tips.js";
 
 const MAX_COLUMNS = 5;
 const WIDE_COLUMN = 128;     // уже — колонки печатного планшета не помещаются: карточки по две в ряд
@@ -123,7 +124,7 @@ export class BoardView {
     for (const [k, steps] of Object.entries(faction.tokens || {})) boxes.push([k, (pl.tokens || {})[k] || 0, steps]);
     const cells = boxes.map(([k, amount, steps]) => {
       const marks = pl.resource_marks[k] || [];
-      return h("div.stock-cell", { style: { "--res": UI.resource_colors[k] || "var(--muted)" } },
+      return h("div.stock-cell", { style: { "--res": UI.resource_colors[k] || "var(--muted)" }, ...tipAttr("stock", k) },
         h("span.stock-amount", mark(k), String(amount)),
         h("span.stock-steps", steps.map(([threshold, vp]) => h("span.step" + (marks.includes(threshold) ? ".done" : ""),
           h("span.threshold", String(threshold)), h("span.vp", `${vp}${mark("laurel")}`)))));
@@ -276,11 +277,9 @@ export class BoardView {
       if (holder !== undefined) status = holder === this.you ? "ваш" : `у игрока ${nameOf(static_, holder, true)}`;
       else if (region in state.reserved) status = `бронь: ${nameOf(static_, state.reserved[region], true)}`;
       else status = "свободен";
-      let cond = conditionIcons(artifactCondition(static_, pl.faction, region));
-      const wood = faction.artifact_wood;
-      if (wood) cond += " / " + res({ wood: wood.prices[region] });   // Гнездовье эльфов: и за дерево, через «/»
-      const card = h("div.card.artifact" + (holder !== undefined ? ".held" : ""), h("b.cond", cond),
-        h("img.artifact-picture", { src: picture(`artifact_${region}`), alt: region, title: region, draggable: false }),
+      const card = h("div.card.artifact" + (holder !== undefined ? ".held" : ""), tipAttr("artifact", region),
+        h("b.cond", artifactCost(static_, pl.faction, region)),
+        h("img.artifact-picture", { src: picture(`artifact_${region}`), alt: region, draggable: false }),
         h("p", markup(board[region])), h("small.status" + (holder !== undefined ? ".bold" : ".muted"), status));
       if (holder !== undefined) card.style.setProperty("--holder", color(holder));
       return card;
@@ -296,7 +295,7 @@ export class BoardView {
       const selectable = picking && this.monsters.options.has(i);
       return h("div.card.monster" + (marked === "monster" ? ".beaten" : marked === "pvp" ? ".pvp" : "")
         + (selectable ? ".selectable" : "") + (selectable && i === this.monsters.picked ? ".picked" : ""),
-      { onclick: selectable ? () => this.pickMonster(i) : null },
+      { onclick: selectable ? () => this.pickMonster(i) : null, ...tipAttr("monster", this.player, i) },
       h("b", `${m.strength}${mark("shield")}` + (marked === "monster" ? " ✓" : marked === "pvp" ? " ⚔" : "")),
       h("img.monster-picture", { src: picture(`monster_${i}`), alt: "", draggable: false }),
       h("span.monster-reward", h("b", `${m.vp}${mark("laurel")}`), h("span.loot", Object.entries(m.loot).map(([k, v]) => h("span", res({ [k]: v }))))));
@@ -310,6 +309,71 @@ export class BoardView {
     this.monsters.onPick?.(i);
     this.redraw();
   }
+}
+
+// цена или условие артефакта для фракции; у эльфов с Гнездовьем — и за дерево, через «/»
+function artifactCost(static_, faction, region) {
+  const cond = conditionIcons(artifactCondition(static_, faction, region));
+  const wood = static_.factions[faction].artifact_wood;
+  return wood ? `${cond} / ${res({ wood: wood.prices[region] })}` : cond;
+}
+
+// --- подсказки (tips.js): артефакт, чудовище, ресурсы ----------------------------------------------
+
+export function tipContent(static_, state, kind, args) {
+  if (kind === "artifact") return artifactTip(static_, state, args[0]);
+  if (kind === "monster") return monsterTip(static_, state, Number(args[0]), Number(args[1]));
+  if (kind === "stock") return stockTip(static_, state, args[0]);
+  return null;
+}
+
+const tipRow = (static_, p, ...lines) => h("div.tip-row", { style: { "--seat": color(p) } }, h("b", nameOf(static_, p, true)), lines);
+
+// регион, у кого артефакт, и для каждого игрока: цена или условие, сколько уже есть, что даёт
+function artifactTip(static_, state, region) {
+  if (!(region in static_.regions)) return null;
+  const holder = state.artifact_holder[region];
+  const status = holder !== undefined ? `у игрока ${nameOf(static_, holder, true)}`
+    : region in state.reserved ? `бронь: ${nameOf(static_, state.reserved[region], true)}` : "свободен";
+  const rows = state.players.map((pl, p) => {
+    const faction = static_.factions[pl.faction];
+    const effect = (faction.artifacts_board || faction.artifacts_ru || faction.artifacts)[region];
+    const kind = artifactCondition(static_, pl.faction, region).condition === "pay" ? "цена" : "условие";
+    return tipRow(static_, p, h("div", `${kind} ${artifactCost(static_, pl.faction, region)} · ${conditionProgress(static_, state, p, region)}`),
+      effect ? h("div.small", markup(effect)) : null);
+  });
+  return h("div", h("div.tip-head", h("img.tip-picture", { src: picture(`artifact_${region}`), alt: "" }),
+    h("div", h("b", region), h("div.muted", status))), rows);
+}
+
+// чудовище на этом месте линии: у кого оно побеждено и что даёт (у наг — своя линия)
+function monsterTip(static_, state, owner, i) {
+  const line = monsterLine(static_, state.players[owner].faction);
+  if (!line[i]) return null;
+  const rows = state.players.map((pl, p) => {
+    const m = monsterLine(static_, pl.faction)[i], marked = pl.monsters[i];
+    if (!m) return null;
+    const status = marked === "monster" ? "✓ побеждено" : marked === "pvp" ? "⚔ обведено: побеждён игрок" : "не побеждено";
+    return tipRow(static_, p, h("div", `${m.strength}${mark("shield")} → ${reward(m.vp, m.loot)}`),
+      h("div.small" + (marked ? ".bold" : ".muted"), status));
+  });
+  return h("div", h("div.tip-head", h("img.tip-picture", { src: picture(`monster_${i}`), alt: "" }),
+    h("div", h("b", `Чудовище ${i + 1} из ${line.length}`), h("div.muted", "у каждого — в своей линии"))), rows);
+}
+
+// ресурсы всех игроков; столбец того, на который навели, выделен
+function stockTip(static_, state, key) {
+  const players = state.players;
+  const kinds = ["wood", "iron", "gold"];
+  for (const pl of players) for (const k of Object.keys(static_.factions[pl.faction].tokens || {})) if (!kinds.includes(k)) kinds.push(k);
+  const now = (k) => (k === key ? ".now" : "");
+  return h("table.tip-table",
+    h("thead", h("tr", h("th"), kinds.map((k) => h("th" + now(k), mark(k))))),
+    h("tbody", players.map((pl, p) => h("tr", h("th.player", { style: { "--seat": color(p) } }, nameOf(static_, p, true)),
+      kinds.map((k) => {
+        const own = ["wood", "iron", "gold"].includes(k) || k in (static_.factions[pl.faction].tokens || {});
+        return h("td" + now(k), own ? String((k in pl.resources ? pl.resources : pl.tokens || {})[k] || 0) : "—");
+      })))));
 }
 
 // --- сводка «Все игроки» ------------------------------------------------------------------------
@@ -385,8 +449,8 @@ export function playersSummary(static_, state, you, onOpen) {
     }),
     table("Крепости и артефакты", [h("th", { title: "Победы в сражениях" }, mark("victory")), h("th", "Захваченные крепости"), h("th", "Артефакты")],
       (pl) => [String(pl.victories), pl.fortresses.join(", ") || "—",
-        pl.artifacts.length ? h("span.art-list", pl.artifacts.map((r) => h("span", h("img.ic.art", { src: picture(`artifact_${r}`), alt: r, title: r })))) : "—"]),
-    table("Условия артефактов", artifacts.map(([r, a]) => h("th.art-head", h("img.ic.art", { src: picture(`artifact_${r}`), alt: r, title: r }),
+        pl.artifacts.length ? h("span.art-list", pl.artifacts.map((r) => h("span", h("img.ic.art", { src: picture(`artifact_${r}`), alt: r, ...tipAttr("artifact", r) })))) : "—"]),
+    table("Условия артефактов", artifacts.map(([r, a]) => h("th.art-head", h("img.ic.art", { src: picture(`artifact_${r}`), alt: r, ...tipAttr("artifact", r) }),
       h("small", conditionIcons(a)))), (pl, p) => artifacts.map(([r]) => conditionProgress(static_, state, p, r))),
     h("p.muted.small", "Тап по строке — планшет и карта игрока."));
 }

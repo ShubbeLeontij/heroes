@@ -506,3 +506,20 @@ img.ic.art { height: 28px; }
 .join-title { display: flex; align-items: center; gap: 12px; }
 .join-title img { width: 56px; height: 56px; border-radius: 12px; }
 .panel .note.muted { font-size: 0.9em; }
+
+/* подсказки (tips.js): артефакт, чудовище, ресурсы других игроков */
+[data-tip] { cursor: help; }
+.tip {
+  position: fixed; z-index: 1000; max-width: min(24em, calc(100vw - 12px)); max-height: calc(100vh - 12px); overflow: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .18); font-size: .9rem;
+}
+.tip-head { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+.tip-picture { height: 44px; width: auto; }
+.tip-row { border-left: 4px solid var(--seat); padding: 2px 0 2px 6px; margin-top: 4px; }
+.tip-row .small { font-size: .85em; }
+.tip-table { border-collapse: collapse; }
+.tip-table th, .tip-table td { padding: 2px 6px; text-align: center; }
+.tip-table th.player { text-align: left; white-space: nowrap; border-left: 4px solid var(--seat); }
+.tip-table .now { background: var(--chip); font-weight: bold; }
+.tip .bold { font-weight: bold; }

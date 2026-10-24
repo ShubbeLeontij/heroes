@@ -45,10 +45,10 @@ export function iconSrc(kind) {
 
 export function icon(kind, cls = "") {
   const img = document.createElement("img");
-  const artifact = kind.startsWith("artifact_") ? kind.slice(9) : null;   // рисунок артефакта: его регион — подсказкой
+  const artifact = kind.startsWith("artifact_") ? kind.slice(9) : null;   // рисунок артефакта — с подсказкой (tips.js)
   img.className = `ic ic-${artifact !== null ? "art" : kind.replace(/_off$/, "")} ${cls}`.trim();
   img.alt = artifact || "";
-  if (artifact) img.title = artifact;
+  if (artifact) img.dataset.tip = `artifact|${artifact}`;
   img.draggable = false;
   if (kind.startsWith("avatar")) {
     img.src = seatAvatar(Number(kind.slice(6)));

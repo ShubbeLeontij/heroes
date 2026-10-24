@@ -349,3 +349,75 @@ def test_map_gestures(browser):
         assert not browser.errors, browser.errors
     finally:
         network.server.close()
+
+
+def test_tips(browser):
+    """Подсказки: наведение мышью на артефакт, чудовище и склад планшета — полная информация по всем игрокам;
+    на телефоне — по тапу (и по рисунку артефакта на карте); тап мимо — подсказка закрывается."""
+    recorder = DestinationRecorder(1)
+    with pytest.raises(Stop):
+        Game([recorder, RandomBot(2)], names=["Аня", "Боря"]).run()
+    network = cli.Network(0, "secret", log_fn=lambda text: None)
+    network.seat("Аня")
+    network.server.start()
+    tip = "(() => { const t = document.querySelector('.tip'); return t && !t.classList.contains('hidden') ? t.textContent : null; })()"
+    center = """((sel) => { const r = document.querySelector(sel).getBoundingClientRect();
+        return [r.left + r.width / 2, r.top + r.height / 2]; })"""
+
+    def hover(selector):
+        browser.evaluate(f"document.querySelector({json.dumps(selector)}).scrollIntoView({{block: 'center'}}); 1")
+        time.sleep(0.2)   # прокрутка закрывает подсказку — пусть закончится до наведения
+        x, y = browser.evaluate(f"{center}({json.dumps(selector)})")
+        browser.call("Input.dispatchMouseEvent", type="mouseMoved", x=x, y=y)
+        return browser.evaluate(tip)
+
+    try:
+        # телефон: тап по рисунку артефакта на карте — подсказка, тап мимо — закрыть
+        browser.screen(390, 844)
+        browser.open(f"http://127.0.0.1:{network.server.port}/")
+        browser.wait_for("window.app")
+        browser.evaluate(f"app.handle({json.dumps(recorder.sync)}); app.handle({json.dumps(recorder.decision)}); 1")
+        browser.wait_for("app.map.geometry")
+        browser.evaluate("app.setView('map'); 1")
+        browser.wait_for("app.map.k > 0")
+        time.sleep(0.5)   # карта подстраивается под размер панели
+        # тап по рисунку артефакта: касание (pointerdown), тап карты, следом щелчок браузера
+        # (настоящие касания эмулятора после других тестов приходят без pointer-событий — шлём их сами)
+        tap_map = """(() => { const m = app.map;
+            const name = Object.keys(m.regions).find((n) => app.static.regions[n].object === "artifact" && app.state.available.includes(n));
+            const [x0, y0, x1, y1] = m.regions[name].object.map((v) => v * m.scaleFactor);
+            document.body.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch", bubbles: true }));
+            m.tap([m.tx + (x0 + x1) / 2 * m.k, m.ty + (y0 + y1) / 2 * m.k]);
+            m.container.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            return name; })()"""
+        name = browser.evaluate(tap_map)
+        assert name in (browser.evaluate(tip) or ""), browser.evaluate(tip)
+        browser.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));"
+                         "document.getElementById('order').click(); 1")   # тап мимо — закрыть
+        assert browser.evaluate(tip) is None
+        touch_click = "document.body.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));" \
+                      "document.querySelector('#board .card.monster').click(); 1"
+        browser.evaluate("app.setView('boards'); 1")
+        browser.evaluate(touch_click)
+        assert "Чудовище 1 из 8" in (browser.evaluate(tip) or "")
+        browser.evaluate(touch_click)   # повторный тап — убрать
+        assert browser.evaluate(tip) is None
+
+        # ПК: наведение мышью на карточки планшета
+        browser.screen(1400, 900, mobile=False)
+        browser.wait_for("!!document.querySelector('#board .card.artifact')")
+        region = browser.evaluate("document.querySelector('#board .card.artifact').dataset.tip.split('|')[1]")
+        text = hover("#board .card.artifact")
+        assert region in text and "Аня" in text and "Боря" in text and "свободен" in text, text
+        text = hover("#board .card.monster")
+        assert "Чудовище 1 из 8" in text and "не побеждено" in text, text
+        assert browser.evaluate("document.querySelectorAll('.tip .tip-table tbody tr').length") == 0
+        hover("#board .stock-cell")
+        assert browser.evaluate("document.querySelectorAll('.tip .tip-table tbody tr').length") == 2
+        assert browser.evaluate("document.querySelector('.tip .tip-table th.now img').className").startswith("ic ic-wood")
+        hover("#order")
+        assert browser.evaluate(tip) is None   # мышь ушла — подсказки нет
+        assert not browser.errors, browser.errors
+    finally:
+        network.server.close()
+        browser.screen(390, 844)

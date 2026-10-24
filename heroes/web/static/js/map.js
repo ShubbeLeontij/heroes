@@ -6,6 +6,7 @@
 
 import { UI, h, icon, mark, rich } from "./rich.js";
 import { color, res, terrainOf } from "./common.js";
+import { hideTip, showTipAt, tipOwner } from "./tips.js";
 
 const ASSETS = "assets/map";
 const WIDTH = 1420;               // берём самый крупный из готовых масштабов: браузер уменьшит сам
@@ -115,7 +116,10 @@ export class MapView {
     c.addEventListener("pointerup", (e) => this.up(e));
     c.addEventListener("pointercancel", (e) => this.up(e, true));
     c.addEventListener("pointerleave", (e) => {
-      if (e.pointerType === "mouse") this.setHover(null, null);
+      if (e.pointerType === "mouse") {
+        this.setHover(null, null);
+        if (tipOwner() === "map") hideTip();
+      }
     });
     c.addEventListener("wheel", (e) => this.wheel(e), { passive: false });
     c.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -263,7 +267,10 @@ export class MapView {
   move(e) {
     const at = this.local(e);
     if (!this.pointers.has(e.pointerId)) {
-      if (e.pointerType === "mouse") this.setHover(this.regionAt(at), this.tokenAt(at));
+      if (e.pointerType === "mouse") {
+        this.setHover(this.regionAt(at), this.tokenAt(at));
+        this.artifactTip(at);
+      }
       return;
     }
     this.pointers.set(e.pointerId, at);
@@ -330,6 +337,31 @@ export class MapView {
       this.selected = region;
       this.onSelect(region);
       this.redraw();
+    } else {
+      this.artifactTip(at);   // касание: тап по рисунку артефакта — подсказка о нём
+    }
+  }
+
+  // рисунок артефакта, который сейчас лежит на карте, под точкой at
+  artifactAt(at) {
+    if (!this.geometry || !this.static || !this.state) return null;
+    const [x, y] = this.toWorld(at).map((v) => v / this.scaleFactor);
+    for (const [name, r] of Object.entries(this.regions)) {
+      if (this.static.regions[name].object !== "artifact" || !this.state.available.includes(name)
+        || !objectShown(this.state, name, "artifact")) continue;
+      const [x0, y0, x1, y1] = r.object;
+      if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return name;
+    }
+    return null;
+  }
+
+  artifactTip(at) {
+    const region = this.artifactAt(at);
+    if (region) {
+      const box = this.container.getBoundingClientRect();
+      showTipAt(`artifact|${region}`, box.left + at[0], box.top + at[1], this.container);
+    } else if (tipOwner() === "map") {
+      hideTip();
     }
   }
 

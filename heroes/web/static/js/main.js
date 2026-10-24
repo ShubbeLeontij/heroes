@@ -7,7 +7,8 @@ import { UI, loadUI, h, rich, appendRich, icon, setSeatAvatar } from "./rich.js"
 import * as C from "./common.js";
 import { makePanel, isSecret } from "./panels.js";
 import { MapView } from "./map.js";
-import { BoardView, playersSummary } from "./board.js";
+import { BoardView, playersSummary, tipContent } from "./board.js";
+import { setTipProvider } from "./tips.js";
 import { ProfilesScreen, squareAvatar } from "./profiles.js";
 
 // localStorage может быть недоступен (приватный режим): тогда просто ничего не помним
@@ -65,6 +66,7 @@ class App {
     this.boardTab = null;     // открытая вкладка планшетов: место игрока или "all" — «Все игроки»
     this.boardStale = false;  // вкладка планшетов скрыта (телефон): перерисовать, когда её откроют
     setSeatAvatar((p) => this.avatarSrc(p));
+    setTipProvider((kind, args) => (this.static && this.state ? tipContent(this.static, this.state, kind, args) : null));
     for (const b of document.querySelectorAll("#tabs button")) b.addEventListener("click", () => this.setView(b.dataset.view));
     $("log-toggle").addEventListener("click", () => this.toggleLog());
     $("log-close").addEventListener("click", () => this.toggleLog(false));
