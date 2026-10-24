@@ -1,4 +1,4 @@
-"""Готовит значки и картинки для окна (heroes/gui/assets/icons/): ресурсы, сила, ПО, местность,
+"""Готовит значки и картинки для страницы (heroes/web/assets/icons/): ресурсы, сила, ПО, местность,
 действия, чудовища, артефакты.
 
 Запускается один раз, вручную; нужны Pillow, numpy и OpenCV, а для памятки — pdftoppm (poppler-utils):
@@ -15,9 +15,9 @@
       фундамент, победа в сражении, модификация (»); из блока «Фракции» — наука гномов, ярость орков,
       нота и крак наг, проклятый регион нежити;
   docs/rules/heroes1-rules.pdf, с. 16 (600 dpi): гидра наг — голова с рисунка планшета, в круге (hydra);
-  heroes/gui/assets/map (делает tools/build_map.py): артефакты — их рисунки с карты (artifact_<регион>).
+  heroes/web/assets/map (делает tools/build_map.py): артефакты — их рисунки с карты (artifact_<регион>).
 Для ресурсов есть и бледные варианты (<ресурс>_off): ресурсы уже посещённого региона.
-Tk сам масштабировать не умеет, поэтому каждый значок — в нескольких высотах: <имя>_<высота>.png.
+Каждый значок — в нескольких высотах: <имя>_<высота>.png.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from PIL import Image, ImageDraw, ImageEnhance
 ROOT = Path(__file__).resolve().parents[1]
 BOARD = ROOT / "docs" / "boards" / "elementals.png"
 MEMO = ROOT / "docs" / "rules" / "heroes1-pamyatka.pdf"
-OUT = ROOT / "heroes" / "gui" / "assets" / "icons"
+OUT = ROOT / "heroes" / "web" / "assets" / "icons"
 BOARD_BOXES = {"wood": (1826, 1284, 1906, 1343), "iron": (1826, 1397, 1904, 1454),
                "gold": (1826, 1514, 1890, 1572), "any": (1567, 3359, 1616, 3408)}
 # рамки на с. 2 памятки в 600 dpi; glyph — чёрный значок (прозрачность по темноте), иначе цветной
@@ -54,7 +54,7 @@ HUMANS = ROOT / "docs" / "boards" / "humans.png"
 MONSTER_COLUMNS = [(641, 744), (776, 886), (919, 1061), (1104, 1207), (1255, 1353), (1400, 1524), (1553, 1684),
                    (1704, 1848)]
 MONSTER_ROWS = (2650, 2773)
-MAP = ROOT / "heroes" / "gui" / "assets" / "map"
+MAP = ROOT / "heroes" / "web" / "assets" / "map"
 HEIGHTS = [10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 40]
 PICTURE_HEIGHTS = [24, 32, 40, 48, 56, 64]   # чудовища и артефакты
 MAGIC = (255, 0, 255)

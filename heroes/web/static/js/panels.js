@@ -1,4 +1,4 @@
-// Формы решений: на каждый вид решения своя, как в heroes/gui/panels.py окна (тексты, данные и ответы — те же).
+// Формы решений: на каждый вид решения своя (данные — heroes/protocol/snapshot.py, ответ проверяет движок хозяина).
 // Форма собирает ответ в том виде, что ждёт движок, и отправляет его через app.sendAnswer. Окончательная
 // проверка — у хозяина: если ответ отклонён, решение придёт снова с полем error, и форма покажет ошибку.
 // Для пальцев: счётчики — с кнопками «−/+», регионы — списком крупных строк (и тапом по карте),
@@ -97,7 +97,7 @@ const less = (a, b) => {
   return false;
 };
 
-// Самая слабая заявка, которой хватает для победы (сила больше need) — panels.cheapest_army окна.
+// Самая слабая заявка, которой хватает для победы (сила больше need).
 // Возвращает [заявка, сколько единиц модифицировать] или null — не хватит и всех.
 export function cheapestArmy(units, need, rules = null, apart = null, upgrade = null) {
   const most = (upgrade || {}).max || 0;
@@ -142,7 +142,7 @@ export function cheapestArmy(units, need, rules = null, apart = null, upgrade = 
   return best;
 }
 
-// Наибольшая сила заявки (panels.best_strength окна)
+// Наибольшая сила заявки
 export function bestStrength(units, rules = null, apart = null, upgrade = null) {
   const most = (upgrade || {}).max || 0;
   if (!(apart in units)) return armyStrength(units, null, rules, upgrade, most);
@@ -150,7 +150,7 @@ export function bestStrength(units, rules = null, apart = null, upgrade = null) 
   return Math.max(armyStrength(units, army, rules, upgrade, most), armyStrength(units, { [apart]: 1 }, rules));
 }
 
-// Заявка войск: сколько единиц каждого вида; итоговая сила и хватит ли её (panels.ArmyPicker окна).
+// Заявка войск: сколько единиц каждого вида; итоговая сила и хватит ли её.
 class ArmyPicker {
   constructor(units, need = null, onChange = null, rules = null, apart = null, upgrade = null) {
     Object.assign(this, { units, need, onChange, rules, apart, upgrade });
@@ -318,7 +318,7 @@ export class Panel {
   // кнопка внизу формы; primary — главная (её же нажимает Enter)
   button(text, onclick, primary = false) {
     const b = h("button" + (primary ? ".primary" : ".secondary"), { type: "button", onclick }, text);
-    this.footer.prepend(b);   // как pack(side="right") в окне: первая добавленная — правее всех
+    this.footer.prepend(b);   // первая добавленная — правее всех
     return b;
   }
 

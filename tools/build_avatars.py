@@ -1,7 +1,7 @@
-"""Рисует готовые аватарки окна (heroes/gui/assets/avatars/): Claude — человечек, которого Claude Code
+"""Рисует готовые аватарки страницы (heroes/web/assets/avatars/): Claude — человечек, которого Claude Code
 показывает в начале новой сессии, бот — голова робота, человек без своей картинки — силуэт. Каждая —
 в четырёх цветах мест за столом (common.PLAYER_COLORS) и нейтральном, одной картинкой
-avatars.MASTER×MASTER: <вид>_<цвет>.png (нужные размеры окно делает само).
+MASTER×MASTER: <вид>_<цвет>.png (нужные размеры браузер делает сам).
 
 Внешних зависимостей нет. Робот и силуэт заданы функциями расстояния до края (SDF), край сглаживается
 по расстоянию в пикселях; человечек Claude — пиксельный, его клетки закрашиваются по точной площади.
@@ -11,19 +11,38 @@ avatars.MASTER×MASTER: <вид>_<цвет>.png (нужные размеры о�
 from __future__ import annotations
 
 import math
+import struct
 import sys
+import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from heroes.gui.avatars import ASSETS, MASTER, write_png  # noqa: E402
-from heroes.gui.common import PLAYER_COLORS  # noqa: E402
+from heroes.web.common import PLAYER_COLORS  # noqa: E402
+
+ASSETS = Path(__file__).resolve().parents[1] / "heroes" / "web" / "assets" / "avatars"
+MASTER = 128
 
 NEUTRAL = "#8a7660"
 EYES = "#2b2620"
 TINT = 0.84    # фон — цвет, смешанный с белым
 RING = 0.06    # ободок цветом знака по краю круга
 
+
+
+def png_bytes(size: int, rgba: bytes | bytearray) -> bytes:
+    """Квадратная RGBA-картинка size×size в PNG (без внешних библиотек)."""
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+    stride = size * 4
+    raw = b"".join(b"\0" + bytes(rgba[y * stride:(y + 1) * stride]) for y in range(size))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+
+
+def write_png(path: str | Path, size: int, rgba: bytes | bytearray) -> None:
+    Path(path).write_bytes(png_bytes(size, rgba))
 
 # --- функции расстояния: точка (x, y) в круге радиуса 1, y вверх; < 0 — внутри фигуры ----------
 

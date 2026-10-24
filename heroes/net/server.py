@@ -1,43 +1,33 @@
-"""Сервер партии: принимает сетевых игроков и привязывает их к местам за столом.
+"""Сервер партии: принимает людей (браузеры) и привязывает их к местам за столом.
 
-Партия идёт на компьютере хозяина. Сетевой игрок — это консольный игрок, у которого
-ввод и вывод идут через Seat, либо графический клиент, которому решения приходят данными.
-Если соединение рвётся, партия ждёт, пока игрок подключится снова, и повторяет ему
-текущий вопрос. Переподключиться можно и другим клиентом (консольным вместо графического).
-На тот же порт заходит и браузер (web.py): он получает страницу веб-клиента, а её WebSocket
-садится за место как графический клиент.
+Партия идёт на компьютере хозяина. Человек за столом получает решения и состояние партии
+данными (heroes/protocol/snapshot.py). Если соединение рвётся, партия ждёт, пока игрок
+подключится снова, и повторяет ему текущий вопрос. Браузер заходит на тот же порт (web.py):
+он получает страницу веб-клиента, а её WebSocket садится за место. Зритель (hello с "watch")
+места не занимает: он видит партию так же, как её видят все, без чьих-либо тайн.
 """
 from __future__ import annotations
 
 import socket
 import threading
 import time
-from collections import deque
 from typing import Callable
 
 from . import web
 from .protocol import MODES, VERSION, Connection
 
-RECENT = 60  # сколько последних сообщений повторить игроку после переподключения
 MAX_AVATAR = 300_000  # аватарка в hello (base64) длиннее — не принимается
 
 
-class ModeChanged(Exception):
-    """Игрок переподключился клиентом другого вида: текущий вопрос надо задать заново по-другому."""
-
-
 class Seat:
-    """Место за столом для сетевого игрока."""
+    """Место за столом для человека."""
 
     def __init__(self, name: str, log_fn: Callable[[str], None]):
         self.name = name
         self.log_fn = log_fn
         self.conn: Connection | None = None
-        self.recent: deque[dict] = deque(maxlen=RECENT)  # последний вывод — для повтора после обрыва
-        self.ever_connected = False
-        self.mode = "console"
         self.avatar: str | None = None   # своя аватарка игрока (PNG в base64), если клиент её прислал
-        # Для графического клиента: сообщения, с которых начинается связь (вся партия целиком).
+        # Сообщения, с которых начинается связь: вся партия целиком.
         self.greeting: Callable[[], list[dict]] | None = None
         self.cond = threading.Condition()
         self.send_lock = threading.Lock()
@@ -47,23 +37,13 @@ class Seat:
         # браузер (web.py) сам знает, что его соединение закрылось: место свободно, не дожидаясь отправки
         return self.conn is not None and not getattr(self.conn, "closed", False)
 
-    def attach(self, conn: Connection, mode: str = "console") -> None:
-        """Посадить игрока за место. Консольному клиенту при переподключении повторить последние
-        сообщения: иначе он увидит только строку текущего вопроса без вариантов ответа.
-        Графическому — прислать всю партию (greeting)."""
+    def attach(self, conn: Connection) -> None:
+        """Посадить игрока за место и прислать ему всю партию (greeting)."""
         with self.send_lock:
-            if mode == "gui":
-                for message in self.greeting() if self.greeting else []:
-                    conn.send(message)
-            elif self.ever_connected:
-                conn.send({"t": "out", "text": "— connection restored, recent messages: —"})
-                for message in self.recent:
-                    if message.get("t") == "out":
-                        conn.send(message)
+            for message in self.greeting() if self.greeting else []:
+                conn.send(message)
             with self.cond:
                 old, self.conn = self.conn, conn
-                self.mode = mode
-                self.ever_connected = True
                 self.cond.notify_all()
         if old:
             old.close()
@@ -77,7 +57,6 @@ class Seat:
 
     def send(self, message: dict) -> None:
         with self.send_lock:
-            self.recent.append(message)
             conn = self.conn
             if conn is None:
                 return
@@ -88,19 +67,14 @@ class Seat:
                 pass
         self.drop(conn)
 
-    def out(self, text: str) -> None:
-        self.send({"t": "out", "text": text})
-
-    def request(self, message: dict, reply: str, mode: str) -> dict:
+    def request(self, message: dict, reply: str) -> dict:
         """Отправить запрос и дождаться ответа вида reply. При обрыве — дождаться переподключения
-        и спросить снова. ModeChanged — игрок теперь сидит за клиентом другого вида (не mode)."""
+        и спросить снова."""
         while True:
             with self.cond:
                 while self.conn is None:
                     self.cond.wait()
                 conn = self.conn
-                if self.mode != mode:
-                    raise ModeChanged
             answer = None
             try:
                 with self.send_lock:
@@ -114,9 +88,38 @@ class Seat:
                 continue
             return answer
 
-    def ask(self, prompt: str) -> str:
-        """Запросить строку у консольного клиента."""
-        return str(self.request({"t": "in", "prompt": prompt}, "line", "console").get("text", ""))
+
+class Audience:
+    """Зрители: видят партию целиком (sync без своего места), её события и кто чем занят."""
+
+    def __init__(self):
+        self.conns: list[Connection] = []
+        self.lock = threading.Lock()
+        self.greeting: Callable[[], list[dict]] | None = None
+
+    def attach(self, conn: Connection) -> None:
+        with self.lock:
+            for message in self.greeting() if self.greeting else []:
+                conn.send(message)
+            self.conns.append(conn)
+
+    def send(self, message: dict) -> None:
+        with self.lock:
+            for conn in list(self.conns):
+                if getattr(conn, "closed", False):
+                    self.conns.remove(conn)
+                    continue
+                try:
+                    conn.send(message)
+                except OSError:
+                    self.conns.remove(conn)
+                    conn.close()
+
+    def close(self) -> None:
+        with self.lock:
+            for conn in self.conns:
+                conn.close()
+            self.conns.clear()
 
 
 class Server:
@@ -125,6 +128,7 @@ class Server:
         self.password = password
         self.log_fn = log_fn
         self.seats: dict[str, Seat] = {}
+        self.audience = Audience()
         self.sock: socket.socket | None = None
 
     def seat(self, name: str) -> Seat:
@@ -155,8 +159,8 @@ class Server:
 
     def _handshake(self, sock: socket.socket, addr) -> None:
         sock.settimeout(120)
-        try:   # браузер: страница и картинки, а запрос /ws — такое же соединение, как у графического клиента
-            conn = web.accept(sock) if web.is_http(sock) else Connection(sock)
+        try:   # браузер: страница, картинки и профили, а запрос /ws — соединение для партии
+            conn = web.accept(sock, self.password) if web.is_http(sock) else Connection(sock)
         except OSError:
             sock.close()
             return
@@ -170,12 +174,15 @@ class Server:
                 if hello.get("version") != VERSION:
                     conn.send({"t": "error", "text": f"Protocol version mismatch (server has {VERSION}). Update the game."})
                     raise ValueError("version")
-                if hello.get("mode", "console") not in MODES:
+                if hello.get("mode") not in MODES:
                     conn.send({"t": "error", "text": f"Unknown client mode {hello.get('mode')!r}."})
                     raise ValueError("mode")
                 if self.password and hello.get("password") != self.password:
                     conn.send({"t": "error", "text": "Wrong password."})
                     raise ValueError("password")
+                if hello.get("watch"):
+                    name = None
+                    break
                 free = self.free_seats()
                 if not free:
                     conn.send({"t": "error", "text": "All network seats are taken."})
@@ -193,12 +200,17 @@ class Server:
             conn.close()
             return
         sock.settimeout(None)
+        if name is None:
+            conn.send({"t": "welcome", "name": None, "watch": True, "text": "You are watching the game."})
+            self.log_fn(f"A spectator connected ({addr[0]})")
+            self.audience.attach(conn)
+            return
         conn.send({"t": "welcome", "name": name, "text": f"You are at the table as {name}."})
         self.log_fn(f"{name} connected ({addr[0]})")
         avatar = hello.get("avatar")
         if isinstance(avatar, str) and len(avatar) <= MAX_AVATAR:
             self.seats[name].avatar = avatar
-        self.seats[name].attach(conn, hello.get("mode", "console"))
+        self.seats[name].attach(conn)
 
     def wait_all(self) -> None:
         """Ждать, пока все сетевые места займут; печатать, кого ещё ждём."""
@@ -215,6 +227,7 @@ class Server:
     def broadcast_end(self, text: str) -> None:
         for seat in self.seats.values():
             seat.send({"t": "end", "text": text})
+        self.audience.send({"t": "end", "text": text})
 
     def close(self) -> None:
         if self.sock:
@@ -222,6 +235,7 @@ class Server:
         for seat in self.seats.values():
             if seat.conn:
                 seat.conn.close()
+        self.audience.close()
 
 
 def local_addresses() -> list[str]:

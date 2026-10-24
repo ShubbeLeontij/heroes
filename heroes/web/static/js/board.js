@@ -1,4 +1,4 @@
-// Планшет игрока и сводка «Все игроки» — то же, что heroes/gui/boardview.py окна, но HTML-карточками,
+// Планшет игрока и сводка «Все игроки» — HTML-карточками,
 // которые сами перестраиваются под ширину экрана. На широком экране здания стоят колонками, как на печатном
 // планшете, со стрелками зависимостей; на узком — по две в ряд, а вместо стрелок подписано, какое здание нужно.
 
@@ -328,7 +328,7 @@ const CONDITION_SHORT = {
 };
 
 // насколько игрок выполнил условие артефакта (boardview.condition_progress)
-function conditionProgress(static_, state, p, region) {
+export function conditionProgress(static_, state, p, region) {
   const pl = state.players[p], holder = state.artifact_holder[region];
   if (holder === p) return "✦ взят";
   const cond = artifactCondition(static_, pl.faction, region), kind = cond.condition;
@@ -373,7 +373,7 @@ function specialsCell(static_, state, p) {
   return parts.join("  ");
 }
 
-// Сводка по всем игрокам — пять таблиц, как вкладка «Все игроки» окна; тап по строке — планшет и карта игрока.
+// Сводка по всем игрокам — пять таблиц; тап по строке — планшет и карта игрока.
 export function playersSummary(static_, state, you, onOpen) {
   const players = state.players;
   const special = Object.values(static_.factions).some((f) => (f.tokens && Object.keys(f.tokens).length) || f.science || f.notes || f.curses);

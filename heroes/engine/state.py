@@ -33,7 +33,7 @@ class PlayerState:
         default_factory=lambda: {"wood": [], "iron": [], "gold": []}
     )
     fortresses: list[str] = field(default_factory=list)
-    # Перемещения по порядку: [откуда, куда] — карта в окне рисует их стрелками. Правил не касается.
+    # Перемещения по порядку: [откуда, куда] — карта на странице рисует их стрелками. Правил не касается.
     routes: list[list[str]] = field(default_factory=list)
     # --- особенности фракций (у людей пустые) ---
     tokens: dict[str, int] = field(default_factory=dict)   # уникальные ресурсы: ярость орков, наука гномов

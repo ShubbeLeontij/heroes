@@ -11,7 +11,7 @@ RESOURCES = ("wood", "iron", "gold")
 TERRAINS = ("field", "forest", "mountain", "lake")
 OBJECT_TYPES = ("fortress", "foundation", "portal", "artifact")
 # Уникальные ресурсы фракций: ярость орков, наука гномов. Хранятся отдельно от склада
-# (PlayerState.tokens): соперники не могут их забрать, а склад окна знает только три ресурса.
+# (PlayerState.tokens): соперники не могут их забрать, а склад на странице знает только три ресурса.
 TOKENS = ("rage", "science")
 ARTIFACT_CONDITIONS = ("pay", "foundationsBuilt", "battleWins", "mountainsVisited")
 EFFECT_TYPES = (
@@ -106,7 +106,7 @@ class Building:
     text: str
     effects: tuple[dict, ...]
     text_ru: str = ""  # для экрана (графический интерфейс); Claude и консоль получают text
-    text_board: str = ""  # как на печатном планшете: со значками {wood}, {laurel}… (heroes/gui/icons.py)
+    text_board: str = ""  # как на печатном планшете: со значками {wood}, {laurel}… (heroes/web/static/js/rich.js)
 
 
 @dataclass(frozen=True)

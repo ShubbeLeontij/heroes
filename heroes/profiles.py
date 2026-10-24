@@ -1,17 +1,21 @@
-"""Профили игроков на этом компьютере: имя, аватарка, статистика партий.
+"""Профили игроков на компьютере хозяина: имя, аватарка, статистика партий.
 
-  profiles/profiles.json          — {"active": <id>}: профиль, выбранный на стартовом экране
   profiles/<id>/profile.json      — {"id", "name", "created", "games": [запись о партии, …]}
-  profiles/<id>/avatar.png        — своя аватарка (готовит gui/avatars.py)
+  profiles/<id>/avatar.png        — своя аватарка (квадрат PNG; её готовит браузер)
+
+Профиль человека — по его имени за столом (без учёта регистра): хозяин заводит его сам, когда партия
+доиграна, и кладёт туда аватарку, с которой человек играл. Смотрят и правят профили в браузере
+(heroes/net/web.py, экран «Профили и статистика»).
 
 Запись о партии — только о доигранной (после подсчёта очков); строится по тем же данным, что получает
-окно (static и state из heroes/protocol/snapshot.py), поэтому одинаково пишется и у хозяина, и у гостя:
+браузер (static и state из heroes/protocol/snapshot.py):
   {"game_id", "date", "you": номер места, "players": [{"name", "kind", "faction", "faction_name",
    "turn": место в очерёдности (1 — первый игрок первого раунда), "vp", "score", "winner", "profile"}, …]}
 """
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import shutil
 import uuid
@@ -21,6 +25,8 @@ from pathlib import Path
 
 PROFILE_DIR = Path("profiles")
 MAX_NAME = 24
+MAX_AVATAR = 300_000   # аватарка в base64 длиннее — не принимается (как в hello, net/server.py)
+HUMANS = ("human", "remote")   # «remote» — человек по сети в сохранениях прежних версий
 
 
 @dataclass
@@ -47,7 +53,7 @@ class Profile:
 
 
 def avatar_b64(profile: Profile | None) -> str | None:
-    """Своя аватарка профиля (PNG) в base64 — для окон соперников (static["avatars"], hello гостя)."""
+    """Своя аватарка профиля (PNG) в base64 — для всех за столом (static["avatars"])."""
     path = profile.avatar if profile else None
     try:
         return base64.b64encode(path.read_bytes()).decode() if path else None
@@ -73,11 +79,12 @@ def get(profile_id: str | None, folder: str | Path = PROFILE_DIR) -> Profile | N
 
 
 def by_name(name: str, folder: str | Path = PROFILE_DIR) -> Profile | None:
-    return next((p for p in all_profiles(folder) if p.name == name), None)
+    """Профиль с этим именем без учёта регистра."""
+    return next((p for p in all_profiles(folder) if p.name.casefold() == name.strip().casefold()), None)
 
 
 def check_name(name: str, folder: str | Path = PROFILE_DIR, own_id: str | None = None) -> str | None:
-    """Почему такое имя нельзя (по-русски, для окна), или None."""
+    """Почему такое имя нельзя (по-русски, для браузера), или None."""
     name = name.strip()
     if not name:
         return "Имя не может быть пустым."
@@ -97,15 +104,12 @@ def save(profile: Profile) -> None:
 
 
 def create(name: str, folder: str | Path = PROFILE_DIR) -> Profile:
-    """Новый профиль; первый созданный становится активным."""
     error = check_name(name, folder)
     if error:
         raise ValueError(error)
     profile = Profile(uuid.uuid4().hex[:12], name.strip(), datetime.now().isoformat(timespec="seconds"),
                       folder=Path(folder))
     save(profile)
-    if get_active(folder) is None:
-        set_active(profile.id, folder)
     return profile
 
 
@@ -118,36 +122,28 @@ def rename(profile: Profile, name: str) -> None:
 
 
 def delete(profile: Profile) -> None:
-    """Удалить профиль со статистикой и аватаркой; активным становится другой (если есть)."""
+    """Удалить профиль со статистикой и аватаркой."""
     shutil.rmtree(profile.path, ignore_errors=True)
-    if _settings(profile.folder).get("active") == profile.id:
-        rest = all_profiles(profile.folder)
-        set_active(rest[0].id if rest else None, profile.folder)
 
 
-def unique_name(base: str = "Игрок", folder: str | Path = PROFILE_DIR) -> str:
-    """«Игрок 1», «Игрок 2»… — первое свободное имя для нового профиля."""
-    n = 1
-    while check_name(f"{base} {n}", folder):
-        n += 1
-    return f"{base} {n}"
-
-
-def _settings(folder: str | Path) -> dict:
+def set_avatar(profile: Profile, encoded: str | None) -> None:
+    """Своя аватарка — PNG в base64 (как её присылает браузер); None — убрать её."""
+    path = profile.path / "avatar.png"
+    if encoded is None:
+        for old in (path, profile.path / "avatar_96.png"):
+            old.unlink(missing_ok=True)
+        return
     try:
-        return json.loads((Path(folder) / "profiles.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-
-
-def get_active(folder: str | Path = PROFILE_DIR) -> Profile | None:
-    return get(_settings(folder).get("active"), folder)
-
-
-def set_active(profile_id: str | None, folder: str | Path = PROFILE_DIR) -> None:
-    folder = Path(folder)
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / "profiles.json").write_text(json.dumps({**_settings(folder), "active": profile_id}), encoding="utf-8")
+        data = base64.b64decode(encoded, validate=True) if len(encoded) <= MAX_AVATAR else b""
+    except (binascii.Error, ValueError):
+        data = b""
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("Аватарка — картинка PNG не больше 220 КБ.")
+    profile.path.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".png.tmp")
+    tmp.write_bytes(data)
+    tmp.replace(path)
+    (profile.path / "avatar_96.png").unlink(missing_ok=True)
 
 
 # --- статистика ----------------------------------------------------------------------------------
@@ -204,17 +200,28 @@ def record_game(static: dict, state: dict, seat_profiles: dict[int, str], folder
     return names
 
 
-def seat_profiles(meta: dict, names: list[str], folder: str | Path = PROFILE_DIR) -> dict[int, str]:
-    """Места людей за этим компьютером → профили: из meta["profiles"], а в партиях без этой записи
-    (консоль, старые сохранения) — по совпадению имени человека с именем профиля."""
-    if "profiles" in meta:
-        return {int(seat): pid for seat, pid in meta["profiles"].items() if pid}
+def seat_profiles(meta: dict, names: list[str], folder: str | Path = PROFILE_DIR, create_missing: bool = False) -> dict[int, str]:
+    """Места людей → профили: по записи meta["profiles"] (партии из прежнего окна), иначе по имени.
+    create_missing — завести профиль человеку, у которого его ещё нет (если имя годится для профиля)."""
+    linked = {int(seat): pid for seat, pid in meta.get("profiles", {}).items() if pid}
+    known = {p.id for p in all_profiles(folder)}
     result = {}
     for seat, (kind, name) in enumerate(zip(meta.get("players", []), names)):
-        profile = by_name(name, folder) if kind == "human" else None
-        if profile:
+        if kind not in HUMANS:
+            continue
+        if linked.get(seat) in known:
+            result[seat] = linked[seat]
+        elif profile := by_name(name, folder):
             result[seat] = profile.id
+        elif create_missing and check_name(name, folder) is None:
+            result[seat] = create(name, folder).id
     return result
+
+
+def public(folder: str | Path = PROFILE_DIR) -> list[dict]:
+    """Все профили для страницы «Профили и статистика»: с аватарками (base64), итогами и партиями."""
+    return [{"id": p.id, "name": p.name, "created": p.created, "avatar": avatar_b64(p), "summary": summary(p),
+             "games": p.games} for p in all_profiles(folder)]
 
 
 def summary(profile: Profile) -> dict:

@@ -76,7 +76,7 @@ def unit_mods(game: Game, p: int) -> dict[str, list[dict]]:
 
 
 def faction_rules(faction) -> dict:
-    """Особенности фракции, которые окно показывает на планшете: уникальные ресурсы с порогами ПО,
+    """Особенности фракции, которые страница показывает на планшете: уникальные ресурсы с порогами ПО,
     шкала науки, ноты, гидра, войска-ресурс."""
     listed = [e for rule in faction.rules.values() for e in rule.effects]
     effects = {e["type"]: e for e in listed}
@@ -247,7 +247,7 @@ def move_preview(game: Game) -> dict[str, dict[str, dict[str, int]]]:
 
 
 def strength_rules(game: Game, p: int, battle: Battle) -> dict:
-    """Как считать силу заявки (gui/common.army_strength повторяет effects.army_strength): прибавка к итогу,
+    """Как считать силу заявки (js/common.js armyStrength повторяет effects.army_strength): прибавка к итогу,
     войска, чья сила — их число в сражении (краки), и войска, удваивающие силу других (механики).
     Модификации Лавки бронника сюда не входят: их покупают отдельным решением после заявки."""
     return {"bonus": battle_bonus(game, p, battle),

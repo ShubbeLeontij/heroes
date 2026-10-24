@@ -1,14 +1,21 @@
 """Веб-клиент: страница для браузера (телефон, планшет, ПК) на том же порту, что и сервер партии.
 
 Сервер (server.py) по первым байтам соединения узнаёт HTTP-запрос и отдаёт его сюда. Обычные
-запросы получают файлы страницы (heroes/web/static) и картинки окна (heroes/gui/assets), запрос
+запросы получают файлы страницы (heroes/web/static) и картинки (heroes/web/assets), запрос
 /ws становится WebSocket-соединением. Оно устроено как Connection из protocol.py — те же
-send/recv/close и те же сообщения режима "gui", — поэтому дальше сервер сажает браузер за место
-так же, как графический клиент.
+send/recv/close и те же сообщения, — поэтому дальше сервер сажает браузер за место.
 
-Отличие одно: браузер получает и русские тексты. Перевод — тот же, что в окне (heroes/gui/ru.py),
-и добавляется к сообщениям там, где окно переводит само:
-  sync      + "log_ru": [...]          — журнал, как его показывает окно (имена с фракциями)
+POST /profiles — профили игроков на компьютере хозяина (heroes/profiles.py). Тело и ответ — JSON;
+если у партии есть пароль, он нужен и здесь (поле "password", иначе 403):
+  {"action": "list"}                          → {"profiles": [...]} (profiles.public)
+  {"action": "create", "name"}                → {"profile": {...}}
+  {"action": "rename", "id", "name"}          → {"profile": {...}}
+  {"action": "avatar", "id", "avatar": base64 PNG | null} → {"profile": {...}}
+  {"action": "delete", "id"}                  → {}
+Отказ — 400 и {"error": "<по-русски>"}.
+
+Браузер получает и русские тексты (перевод — heroes/web/ru.py); они добавляются к сообщениям:
+  sync      + "log_ru": [...]          — журнал (имена с фракциями)
   event     + "text_ru", "popup"       — строка журнала; табличка над фишкой: [вид, место, подпись] или null
   decision  + "reason_ru"              — причина получения ресурсов (если есть data["reason"])
   error, end, welcome + "text_ru"
@@ -31,7 +38,7 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "web" / "static"
-ASSETS = ROOT / "gui" / "assets"
+ASSETS = ROOT / "web" / "assets"
 # что можно запросить: путь в адресе → каталог на диске
 ROUTES = {"static": STATIC, "assets/icons": ASSETS / "icons", "assets/map": ASSETS / "map",
           "assets/avatars": ASSETS / "avatars"}
@@ -46,18 +53,21 @@ PING = 15        # раз в столько секунд сервер шлёт �
 SILENCE = 45     # от браузера столько секунд ничего (даже pong) — связь оборвана, место свободно
 
 
+METHODS = (b"GET ", b"HEAD", b"POST")
+
+
 def is_http(sock: socket.socket) -> bool:
-    """Соединение начинается с «GET » — это браузер. Байты остаются в сокете (MSG_PEEK)."""
+    """Соединение начинается с HTTP-метода — это браузер. Байты остаются в сокете (MSG_PEEK)."""
     while True:
         head = sock.recv(4, socket.MSG_PEEK)
-        if len(head) == 4 or not head or not b"GET ".startswith(head):
-            return head == b"GET "
+        if len(head) == 4 or not head or not any(m.startswith(head) for m in METHODS):
+            return head in METHODS
         time.sleep(0.01)   # пришла только часть первых байт
 
 
-def accept(sock: socket.socket) -> WebSocketConnection | None:
+def accept(sock: socket.socket, password: str | None = None) -> WebSocketConnection | None:
     """Ответить на HTTP-запросы этого соединения. Запрос /ws — WebSocket-соединение для сервера партии;
-    None — браузер получил файлы и соединение закрыто."""
+    None — браузер получил файлы и соединение закрыто. password — пароль партии (для профилей)."""
     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     buffer = b""
     try:
@@ -74,7 +84,20 @@ def accept(sock: socket.socket) -> WebSocketConnection | None:
             path = unquote(urlsplit(target).path).strip("/")
             if path == "ws" and headers.get("upgrade", "").lower() == "websocket":
                 return upgrade(sock, headers, buffer)
-            if method not in ("GET", "HEAD"):
+            if method == "POST" and path == "profiles":
+                length = int(headers.get("content-length") or 0)
+                if not 0 <= length <= MAX_MESSAGE:
+                    raise ValueError("body too long")
+                while len(buffer) < length:
+                    chunk = sock.recv(65536)
+                    if not chunk:
+                        raise ConnectionError
+                    buffer += chunk
+                body, buffer = buffer[:length], buffer[length:]
+                status, reply = profile_request(body, password)
+                respond(sock, status, json.dumps(reply, ensure_ascii=False).encode("utf-8"),
+                        {"Content-Type": TYPES[".json"], "Cache-Control": "no-store"})
+            elif method not in ("GET", "HEAD"):
                 respond(sock, 405, b"Method not allowed")
             else:
                 serve(sock, path, headers, head_only=method == "HEAD")
@@ -102,7 +125,8 @@ def parse_request(head: bytes) -> tuple[str, str, dict[str, str]]:
 
 def respond(sock: socket.socket, status: int, body: bytes = b"", headers: dict[str, str] | None = None,
             head_only: bool = False) -> None:
-    reason = {200: "OK", 304: "Not Modified", 403: "Forbidden", 404: "Not Found", 405: "Method Not Allowed"}[status]
+    reason = {200: "OK", 304: "Not Modified", 400: "Bad Request", 403: "Forbidden", 404: "Not Found",
+              405: "Method Not Allowed"}[status]
     lines = [f"HTTP/1.1 {status} {reason}", f"Content-Length: {len(body)}", *(f"{k}: {v}" for k, v in (headers or {}).items())]
     sock.sendall(("\r\n".join(lines) + "\r\n\r\n").encode("latin-1") + (b"" if head_only or status == 304 else body))
 
@@ -118,14 +142,55 @@ def resolve(path: str) -> Path | None:
     return None
 
 
+_profiles_lock = threading.Lock()   # правки профилей из нескольких браузеров — по одной
+
+
+def profile_request(body: bytes, password: str | None) -> tuple[int, dict]:
+    """Запрос страницы «Профили и статистика» (см. описание модуля): (HTTP-статус, ответ)."""
+    from .. import profiles
+    try:
+        request = json.loads(body.decode("utf-8"))
+        assert isinstance(request, dict)
+    except (ValueError, AssertionError):
+        return 400, {"error": "Непонятный запрос."}
+    if password and request.get("password") != password:
+        return 403, {"error": "Неверный пароль."}
+    action = request.get("action")
+    with _profiles_lock:
+        if action == "list":
+            return 200, {"profiles": profiles.public()}
+        try:
+            if action == "create":
+                profile = profiles.create(str(request.get("name", "")))
+            else:
+                profile = profiles.get(str(request.get("id", "")))
+                if profile is None:
+                    return 400, {"error": "Такого профиля нет — возможно, его уже удалили."}
+                if action == "rename":
+                    profiles.rename(profile, str(request.get("name", "")))
+                elif action == "avatar":
+                    avatar = request.get("avatar")
+                    profiles.set_avatar(profile, avatar if isinstance(avatar, str) else None)
+                elif action == "delete":
+                    profiles.delete(profile)
+                    return 200, {}
+                else:
+                    return 400, {"error": "Непонятный запрос."}
+        except ValueError as e:
+            return 400, {"error": str(e)}
+        except OSError as e:
+            return 400, {"error": f"Не удалось сохранить профиль: {e}"}
+        return 200, {"profile": next(p for p in profiles.public() if p["id"] == profile.id)}
+
+
 _ui: bytes | None = None
 
 
 def ui_json() -> bytes:
-    """Справочные данные для страницы из модулей окна: порядок меток значков, русские названия, цвета."""
+    """Справочные данные для страницы (heroes/web/common.py, marks.py): порядок меток значков, русские названия, цвета."""
     global _ui
     if _ui is None:
-        from ..gui import common, marks
+        from ..web import common, marks
         _ui = json.dumps({
             "marks": marks.NAMES, "mark_base": marks.BASE, "colors": common.PLAYER_COLORS,
             "terrains": common.TERRAIN_NAMES, "resources": common.RESOURCE_NAMES, "resource_colors": common.RESOURCE_COLORS,
@@ -183,7 +248,7 @@ def frame(opcode: int, payload: bytes) -> bytes:
 
 
 class WebSocketConnection:
-    """Браузер за столом: то же, что protocol.Connection, но кадрами WebSocket и с русскими текстами.
+    """Браузер за столом или зритель: то же, что protocol.Connection, но кадрами WebSocket и с русскими текстами.
     Кадры читает свой поток (он же отвечает на ping и замечает обрыв), recv() берёт готовые сообщения."""
 
     def __init__(self, sock: socket.socket, rest: bytes = b""):
@@ -233,7 +298,7 @@ class WebSocketConnection:
     def translate(self, message: dict) -> dict:
         """Копия сообщения с русскими текстами (см. описание модуля); само сообщение не меняется —
         его же могут отправлять другим игрокам."""
-        from ..gui import common, ru
+        from ..web import common, ru
         t = message.get("t")
         if t == "sync":
             self.static = message["static"]

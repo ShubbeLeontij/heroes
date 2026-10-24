@@ -1,5 +1,5 @@
-// Значки в тексте: метки частной области Юникода (heroes/gui/marks.py) → картинки из assets/icons,
-// как RichLabel и canvas_text окна. Порядок меток и всё справочное приходит с /ui.json.
+// Значки в тексте: метки частной области Юникода (heroes/web/marks.py) → картинки из assets/icons.
+// Порядок меток и всё справочное приходит с /ui.json.
 
 export let UI = null;
 let KINDS = new Map();       // символ метки → вид значка

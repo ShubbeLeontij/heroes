@@ -1,26 +1,20 @@
-"""Сетевой протокол: JSON-объекты по одному на строку поверх TCP.
+"""Сетевой протокол: JSON-объекты поверх соединения с браузером (WebSocket, web.py) или по одному
+на строку поверх TCP (Connection; им пользуются тесты). Сервер шлёт состояние партии и решения данными.
 
-Клиент бывает консольным (mode "console": сервер шлёт готовый текст и просит строки ввода)
-или графическим (mode "gui": сервер шлёт состояние партии и решения в виде данных).
-
-Сервер → клиент, общее:
+Сервер → клиент:
   {"t": "choose", "seats": [...]}         — указанного места нет: выберите из свободных
-  {"t": "welcome", "name": ..., "text"}   — вы подключены к месту name
+  {"t": "welcome", "name": ..., "text", "watch"?: true}   — вы подключены к месту name (или как зритель)
   {"t": "error", "text": ...}             — отказ в подключении
   {"t": "end", "text": ...}               — партия закончилась или прервана
-Сервер → консольный клиент:
-  {"t": "out", "text": ...}               — вывести текст
-  {"t": "in", "prompt": ...}              — запросить строку ввода (ответ — "line")
-Сервер → графический клиент (содержимое — heroes/protocol/snapshot.py):
-  {"t": "sync", "you", "static", "log", "state"}  — вся партия: при подключении и после загрузки
+  {"t": "sync", "you", "static", "log", "state"}  — вся партия: при подключении и после загрузки (у зрителя you — null)
   {"t": "event", "text", "state"}                  — новое событие лога и состояние после него
   {"t": "state", "state"}                          — кто-то начал или закончил решать (state.thinking)
   {"t": "decision", "id", "player", "kind", "text", "data", "state", "error"?}
                                           — нужно решение (ответ — "answer"); error — прошлый ответ отклонён
 Клиент → сервер:
-  {"t": "hello", "version": 4, "name": ..., "password": ..., "mode": "console" | "gui", "avatar"?: PNG в base64}
-                                          — avatar (необязательно) хозяин рассылает всем в static["avatars"]
-  {"t": "line", "text": ...}
+  {"t": "hello", "version": 5, "name": ..., "password": ..., "mode": "gui", "avatar"?: PNG в base64, "watch"?: true}
+                                          — avatar (необязательно) хозяин рассылает всем в static["avatars"];
+                                            watch — смотреть партию, не занимая места
   {"t": "answer", "id": ..., "answer": <JSON>}
 """
 from __future__ import annotations
@@ -29,9 +23,10 @@ import json
 import socket
 
 # 3 — фракции: особые решения и данные о них (старый клиент их не понял бы);
-# 4 — модификация Лавкой бронника — часть заявки войск, запрет заведомо проигрышного штурма и боя с чудовищем
-VERSION = 4
-MODES = ("console", "gui")
+# 4 — модификация Лавкой бронника — часть заявки войск, запрет заведомо проигрышного штурма и боя с чудовищем;
+# 5 — без консольного клиента (только данные), зрители
+VERSION = 5
+MODES = ("gui",)
 DEFAULT_PORT = 7777
 
 
@@ -60,10 +55,3 @@ class Connection:
                 closer()
             except OSError:
                 pass
-
-
-def parse_address(text: str) -> tuple[str, int]:
-    host, _, port = text.rpartition(":")
-    if not host:
-        return text, DEFAULT_PORT
-    return host, int(port)

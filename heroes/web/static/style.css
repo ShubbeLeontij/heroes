@@ -1,4 +1,4 @@
-/* Веб-клиент «Героев». Цвета — как в окне (heroes/gui/app.py: setup_style).
+/* Веб-клиент «Героев».
    Три раскладки: телефон вертикально (по умолчанию), телефон/планшет горизонтально, широкий экран. */
 
 :root {
@@ -76,11 +76,12 @@ input, textarea {
 
 /* --- экраны ---------------------------------------------------------------------------------- */
 
-#join, #game { display: none; }
+#join, #game, #profiles { display: none; }
 body[data-screen="join"] #join, body:not([data-screen]) #join { display: flex; }
 body[data-screen="game"] #game { display: grid; }
+body[data-screen="profiles"] #profiles { display: flex; }
 
-#join {
+#join, #profiles {
   min-height: 100%;
   align-items: center;
   justify-content: center;
@@ -116,6 +117,29 @@ body[data-screen="game"] #game { display: grid; }
 }
 .file-button input { display: none; }
 #join-seats { display: flex; flex-wrap: wrap; gap: 8px; }
+.join-more { display: flex; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.join-more button { flex: 1 1 auto; }
+
+/* --- профили и статистика (js/profiles.js) -------------------------------------------------- */
+
+#profiles { align-items: flex-start; }
+.card.profiles { max-width: 720px; }
+.profiles-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.profile-list { display: flex; flex-direction: column; gap: 6px; }
+.profile-row { display: flex; align-items: center; gap: 12px; text-align: left; padding: 6px 12px; flex-wrap: wrap; }
+.profile-name { font-weight: bold; flex: 1 1 auto; }
+.profile-new, .inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.profile-new input, .inline input { flex: 1 1 160px; width: auto; }
+.profile-head { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.profile-edit { display: flex; flex-direction: column; gap: 10px; flex: 1 1 240px; }
+img.row-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; vertical-align: middle; }
+img.big-avatar { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: var(--bar); }
+.game-card { background: white; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; overflow-x: auto; }
+.game-card-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+table.game-table { border-collapse: collapse; }
+table.game-table th { font-weight: normal; color: var(--muted); text-align: left; padding: 0 12px 2px 0; white-space: nowrap; }
+table.game-table td { padding: 1px 12px 1px 0; white-space: nowrap; }
+table.game-table tr.you td { font-weight: bold; }
 
 /* --- экран партии: общее -------------------------------------------------------------------- */
 
@@ -266,7 +290,7 @@ body[data-view="map"] #main { grid-template-rows: 1fr 0; }
   #tabs button.active { box-shadow: inset 3px 0 0 var(--accent); }
 }
 
-/* --- широкий экран (ПК, большой планшет): всё сразу, как в окне ------------------------------- */
+/* --- широкий экран (ПК, большой планшет): всё сразу ------------------------------------------- */
 
 @media (orientation: landscape) and (min-width: 1000px) and (min-height: 560px) {
   :root { font-size: 14px; }

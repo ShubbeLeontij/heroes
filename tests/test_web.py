@@ -1,7 +1,6 @@
 """Веб-клиент: страница и картинки по HTTP и партия через WebSocket на том же порту, что и TCP-гости."""
 import base64
 import contextlib
-import gc
 import io
 import json
 import os
@@ -13,20 +12,13 @@ import pytest
 
 from heroes import cli
 from heroes.engine.game import Game
-from heroes.gui.ru import Translator
+from heroes.web.ru import Translator
 from heroes.net import web
 from heroes.net.protocol import VERSION
 from heroes.players.random_bot import RandomBot
 
 from browser import WsClient
-from test_gui_protocol import gui_client
-
-
-@pytest.fixture(autouse=True, scope="module")
-def collect_tk_garbage():
-    """Картинки Tk от тестов окна должны удалиться в главном потоке: иначе сборщик мусора доберётся
-    до них в потоке WebSocket, и Tk пожалуется («main thread is not in main loop»)."""
-    gc.collect()
+from test_protocol import gui_client
 
 
 def http_get(port: int, path: str, headers: str = "") -> tuple[int, dict, bytes]:
@@ -118,7 +110,7 @@ def test_page_ping_gets_pong_and_long_fragmented_messages_arrive():
 
 
 def browser_game(factions, leave_after=None):
-    """Партия: гость — графический клиент через WebSocket (отвечает ботом), соперник — бот."""
+    """Партия: гость — клиент через WebSocket, как браузер (отвечает ботом), соперник — бот."""
     network = cli.Network(0, "secret", log_fn=lambda text: None)
     names = ["Guest", "Bot"]
     meta = {"players": ["remote", "bot"], "seed": 4}
@@ -151,7 +143,7 @@ def test_whole_game_through_websocket(factions):
     assert kinds[:2] == ["welcome", "sync"] and received[1]["you"] == 0
     assert kinds[-1] == "end" and received[-2]["state"]["round"] == 16
     assert not any("the default was used" in line for line in game.state.log)
-    # русские тексты — те же, что показало бы окно
+    # русские тексты — перевод ru.py
     tr = Translator(received[1]["static"])
     events = [m for m in received if m["t"] == "event"]
     assert events and all(m["text_ru"].startswith(tr.line(m["text"])[:3]) for m in events)

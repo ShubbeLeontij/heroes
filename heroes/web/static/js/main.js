@@ -1,6 +1,6 @@
-// Веб-клиент «Героев»: подключение к партии хозяина и экран партии — то же, что окно-гость
-// (heroes/gui/app.py), но для браузера на телефоне, планшете и ПК. Партия идёт у хозяина; сюда приходят
-// снимки состояния и решения данными, ответы проверяет его движок.
+// Веб-клиент «Героев»: подключение к партии хозяина (за своё место или зрителем), экран партии
+// и профили со статистикой — для браузера на телефоне, планшете и ПК. Партия идёт у хозяина
+// (python -m heroes); сюда приходят снимки состояния и решения данными, ответы проверяет его движок.
 
 import { Link } from "./net.js";
 import { UI, loadUI, h, rich, appendRich, icon, setSeatAvatar } from "./rich.js";
@@ -8,9 +8,7 @@ import * as C from "./common.js";
 import { makePanel, isSecret } from "./panels.js";
 import { MapView } from "./map.js";
 import { BoardView, playersSummary } from "./board.js";
-
-const MAX_AVATAR = 300_000;   // heroes/net/server.py: MAX_AVATAR (base64)
-const AVATAR_SIZE = 128;      // heroes/gui/avatars.py: MASTER
+import { ProfilesScreen, squareAvatar } from "./profiles.js";
 
 // localStorage может быть недоступен (приватный режим): тогда просто ничего не помним
 const store = {
@@ -48,7 +46,20 @@ class App {
     this.panel = null;
     this.ended = false;
     this.unread = 0;
+    this.watching = false;    // зритель: места за столом нет, решений не бывает
     this.link = new Link({ message: (m) => this.handle(m), state: (text) => this.connection(text) });
+    this.profiles = new ProfilesScreen($("profiles"), {
+      password: () => $("join-password").value || store.get("heroes.password"),
+      onBack: () => this.joinScreen(null, false),
+      onUse: (profile) => {   // с этим именем и аватаркой и подключаемся (имя из ссылки больше не главное)
+        store.set("heroes.name", profile.name);
+        store.set("heroes.avatar", profile.avatar);
+        const password = $("join-password").value;
+        if (password) store.set("heroes.password", password);
+        history.replaceState(null, "", location.pathname);
+        this.joinScreen(null, false);
+      },
+    });
     this.map = new MapView($("map"));
     this.board = new BoardView($("board"));
     this.boardTab = null;     // открытая вкладка планшетов: место игрока или "all" — «Все игроки»
@@ -57,16 +68,25 @@ class App {
     for (const b of document.querySelectorAll("#tabs button")) b.addEventListener("click", () => this.setView(b.dataset.view));
     $("log-toggle").addEventListener("click", () => this.toggleLog());
     $("log-close").addEventListener("click", () => this.toggleLog(false));
-    this.joinScreen();
+    $("join-watch").addEventListener("click", () => this.join(true));
+    $("join-profiles").addEventListener("click", () => this.profilesScreen());
+    if (location.hash === "#profiles") this.profilesScreen();
+    else this.joinScreen();
+  }
+
+  profilesScreen() {
+    document.body.dataset.screen = "profiles";
+    this.profiles.open();
   }
 
   // --- подключение ---------------------------------------------------------------------------
 
-  joinScreen(error = null) {
+  // auto — сразу подключиться, если страницу перезагрузили посреди партии или открыли ссылкой с именем
+  joinScreen(error = null, auto = true) {
     document.body.dataset.screen = "join";
     $("join-host").textContent = location.host;
     const name = $("join-name"), password = $("join-password");
-    // ссылка вида ?name=Боря&password=… (её можно разослать гостям) — сразу за это место
+    // ссылка вида ?name=Боря&password=… (её печатает хозяин) — сразу за это место
     const params = new URLSearchParams(location.search);
     name.value = params.get("name") ?? store.get("heroes.name") ?? "";
     password.value = params.get("password") ?? store.get("heroes.password") ?? "";
@@ -86,17 +106,21 @@ class App {
       this.showAvatar();
     };
     // страницу перезагрузили посреди партии — сразу подключаемся снова
-    if (!error && (session.get("heroes.playing") || params.has("name")) && name.value) this.join();
+    if (!auto || error) return;
+    if (session.get("heroes.watching")) this.join(true);
+    else if ((session.get("heroes.playing") || params.has("name")) && name.value) this.join();
   }
 
-  join() {
+  // watch — смотреть партию, не занимая места
+  join(watch = false) {
     const name = $("join-name").value.trim(), password = $("join-password").value;
-    store.set("heroes.name", name || null);
+    if (!watch) store.set("heroes.name", name || null);
     store.set("heroes.password", password || null);
     $("join-error").classList.add("hidden");
     $("join-submit").disabled = true;
     $("join-status").textContent = "Подключение…";
-    this.link.connect(name || null, password || null, this.avatar);
+    this.watching = watch;
+    this.link.connect(watch ? null : name || null, password || null, watch ? null : this.avatar, watch);
   }
 
   showAvatar() {
@@ -105,25 +129,13 @@ class App {
     $("join-photo-clear").classList.toggle("hidden", !this.avatar);
   }
 
-  // своя картинка → квадрат 128×128 в PNG (как import_avatar окна), base64 без префикса
-  pickAvatar(file) {
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const side = Math.min(img.naturalWidth, img.naturalHeight);
-      const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = AVATAR_SIZE;
-      canvas.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side,
-        0, 0, AVATAR_SIZE, AVATAR_SIZE);
-      URL.revokeObjectURL(url);
-      const encoded = canvas.toDataURL("image/png").split(",")[1];
-      if (encoded.length > MAX_AVATAR) return;
-      this.avatar = encoded;
-      store.set("heroes.avatar", encoded);
-      this.showAvatar();
-    };
-    img.src = url;
+  // своя картинка → квадрат PNG (profiles.squareAvatar); в конце партии хозяин кладёт её в профиль
+  async pickAvatar(file) {
+    const encoded = await squareAvatar(file);
+    if (!encoded) return;
+    this.avatar = encoded;
+    store.set("heroes.avatar", encoded);
+    this.showAvatar();
   }
 
   connection(text) {
@@ -142,11 +154,18 @@ class App {
         this.chooseSeat(m.seats);
         break;
       case "welcome":
-        session.set("heroes.playing", "1");
         this.gameScreen();
-        this.setStatus(`Вы за столом: ${m.name}`);
-        document.title = `«Герои» — ${m.name}`;
-        this.waiting(null, `Вы подключены как ${m.name}. Ждём начала партии…`);
+        if (m.watch) {
+          session.set("heroes.watching", "1");
+          this.setStatus("Вы смотрите партию");
+          document.title = "«Герои» — зритель";
+          this.waiting(null, "Вы смотрите партию. Ждём, пока все сядут за стол…");
+        } else {
+          session.set("heroes.playing", "1");
+          this.setStatus(`Вы за столом: ${m.name}`);
+          document.title = `«Герои» — ${m.name}`;
+          this.waiting(null, `Вы подключены как ${m.name}. Ждём начала партии…`);
+        }
         break;
       case "sync":
         this.static = m.static;
@@ -168,10 +187,12 @@ class App {
         break;
       case "end":
         session.set("heroes.playing", null);
+        session.set("heroes.watching", null);
         this.finish(m.text || "", m.text_ru);
         break;
       case "error":
         session.set("heroes.playing", null);
+        session.set("heroes.watching", null);
         if (document.body.dataset.screen === "join" || !this.static) this.joinScreen(m.text_ru || m.text);
         else this.failed(m.text_ru || m.text);
         break;
@@ -211,6 +232,7 @@ class App {
   }
 
   title() {
+    if (this.watching) document.title = "«Герои» — зритель";
     if (this.viewer === null || !this.static) return;
     document.title = (this.pending ? "● Ваш ход — " : "") + `«Герои» — ${C.nameOf(this.static, this.viewer)}`;
   }
@@ -498,7 +520,10 @@ class App {
       box.append(h("pre.end-text", shown));
       this.addLog("ИТОГИ\n" + shown, "end");
     }
-    box.append(h("button", { type: "button", onclick: () => location.reload() }, "К подключению"));
+    // доигранная партия уже в профилях людей за столом (cli.record_profiles)
+    box.append(h("div.join-more",
+      finished ? h("button.primary", { type: "button", onclick: () => this.profilesScreen() }, "Профили и статистика") : null,
+      h("button", { type: "button", onclick: () => location.reload() }, "К подключению")));
     $("decision").append(box);
     this.setStatus("Партия окончена");
     this.setView("decision");

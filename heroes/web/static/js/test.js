@@ -1,5 +1,5 @@
 // Тестовый режим страницы (?test=random&seed=N): «человек», который заполняет формы наугад и жмёт кнопки —
-// как PanelPlayer в tests/test_gui_panels.py. Его запускает tests/test_web_browser.py в headless Chromium.
+// Его запускает tests/test_web_browser.py в headless Chromium.
 // Итоги — в window.testLog: виды решений (и шаги строительства), отклонённые хозяином ответы, зависшие формы.
 
 function random(seed) {   // mulberry32: воспроизводимая последовательность по seed

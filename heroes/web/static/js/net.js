@@ -1,9 +1,9 @@
 // Связь с хозяином партии: WebSocket /ws на том же адресе, откуда пришла страница.
-// Сообщения — те же, что получает графический клиент (heroes/net/protocol.py), с русскими текстами
+// Сообщения — heroes/net/protocol.py, с русскими текстами
 // от сервера (heroes/net/web.py). Если связь рвётся, страница сама подключается снова: сервер пришлёт
 // всю партию (sync) и повторит вопрос, оставшийся без ответа.
 
-export const VERSION = 4;   // heroes/net/protocol.py: VERSION
+export const VERSION = 5;   // heroes/net/protocol.py: VERSION
 const RETRY_MS = [500, 1000, 2000, 4000, 5000];
 const PONG_MS = 4000;       // проснувшись, ждём ответа на ping столько; нет ответа — переподключаемся
 
@@ -22,9 +22,10 @@ export class Link {
     window.addEventListener("online", () => this.check());
   }
 
-  // name — место за столом (null — сервер предложит свободные), password, avatar — PNG в base64 или null
-  connect(name, password, avatar) {
-    Object.assign(this, { name, password, avatar });
+  // name — место за столом (null — сервер предложит свободные), password, avatar — PNG в base64 или null;
+  // watch — смотреть партию без места
+  connect(name, password, avatar, watch = false) {
+    Object.assign(this, { name, password, avatar, watch });
     this.ended = false;
     this.open();
   }
@@ -78,6 +79,7 @@ export class Link {
   hello(name) {
     const hello = { t: "hello", version: VERSION, name, password: this.password, mode: "gui" };
     if (this.avatar) hello.avatar = this.avatar;
+    if (this.watch) hello.watch = true;
     this.send(hello);
   }
 
@@ -98,7 +100,7 @@ export class Link {
 
   // Телефон проснулся или вернулась сеть: соединение могло тихо умереть — проверяем его ping-ом.
   check() {
-    if (this.ended || !this.name && !this.ws) return;
+    if (this.ended || !this.name && !this.watch && !this.ws) return;
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.open();
       return;

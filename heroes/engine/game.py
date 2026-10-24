@@ -79,7 +79,7 @@ class Game:
         # кто сейчас принимает решение и какое (игрок -> вид решения); тайные решения — у нескольких сразу
         self.thinking: dict[int, str] = {}
         self.thinking_lock = threading.Lock()
-        self.watchers: list[Callable[[], None]] = []  # подписчики на смену thinking (окно, сетевые окна)
+        self.watchers: list[Callable[[], None]] = []  # подписчики на смену thinking (браузеры за столом, зрители)
         # пока игроки выбирают, куда идти: куда может попасть каждый (игрок -> регион -> цена в ОП)
         self.reach: dict[int, dict[str, int]] = {}
         # свои аватарки игроков (место -> PNG в base64) — только для окон, в сохранение не попадают
