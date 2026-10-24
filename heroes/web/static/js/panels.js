@@ -273,7 +273,6 @@ class ArmyPicker {
 export class Panel {
   static title = "Решение";
   static secret = false;
-  usesMap = false;   // выбор на карте: на телефоне вкладка «Карта» не закрывается при новом решении
 
   constructor(app, message) {
     this.app = app;
@@ -339,8 +338,6 @@ export class Panel {
 }
 
 class RegionChoice extends Panel {
-  usesMap = true;
-
   regionList(options, labels, badges, selected = null) {
     this.options = options;
     this.choice = null;
@@ -396,7 +393,6 @@ class ChooseStart extends RegionChoice {
 // повторный — убирает; тап по занятому месту — убрать; на ПК (и пальцем) действие можно перетащить на место.
 class ActionOrder extends Panel {
   static title = "Вы первый игрок: выберите 4 действия";
-  usesMap = true;
 
   build() {
     this.order = [null, null, null, null];

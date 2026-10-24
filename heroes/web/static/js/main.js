@@ -3,7 +3,7 @@
 // (python -m heroes); сюда приходят снимки состояния и решения данными, ответы проверяет его движок.
 
 import { Link } from "./net.js";
-import { UI, loadUI, h, rich, appendRich, icon, setSeatAvatar } from "./rich.js";
+import { UI, loadUI, h, mark, rich, appendRich, icon, setSeatAvatar } from "./rich.js";
 import * as C from "./common.js";
 import { makePanel, isSecret } from "./panels.js";
 import { MapView } from "./map.js";
@@ -67,7 +67,7 @@ class App {
     this.boardStale = false;  // вкладка планшетов скрыта (телефон): перерисовать, когда её откроют
     setSeatAvatar((p) => this.avatarSrc(p));
     setTipProvider((kind, args) => (this.static && this.state ? tipContent(this.static, this.state, kind, args) : null));
-    for (const b of document.querySelectorAll("#tabs button")) b.addEventListener("click", () => this.setView(b.dataset.view));
+    for (const b of document.querySelectorAll("#tabs button")) b.addEventListener("click", () => this.setView(b.dataset.view));   // решение, журнал
     $("log-toggle").addEventListener("click", () => this.toggleLog());
     $("log-close").addEventListener("click", () => this.toggleLog(false));
     $("join-watch").addEventListener("click", () => this.join(true));
@@ -241,10 +241,11 @@ class App {
 
   // --- вид экрана ------------------------------------------------------------------------------
 
-  // На телефоне видна одна часть сразу (вкладки внизу или сбоку); на широком экране — все, и view не важен.
+  // На телефоне карта видна всегда, а под ней (сбоку) — одна часть: решение, планшет игрока, сводка или журнал
+  // (вкладки внизу или сбоку); на широком экране — все, и view не важен.
   setView(view) {
     document.body.dataset.view = view;
-    for (const b of document.querySelectorAll("#tabs button")) b.classList.toggle("active", b.dataset.view === view);
+    this.markTabs();
     if (view === "log") this.markRead();
     if (view === "boards" && this.boardStale) this.showBoard();
   }
@@ -276,25 +277,37 @@ class App {
 
   // --- планшеты --------------------------------------------------------------------------------
 
-  // вкладка на каждого игрока — аватарка и «Имя (Фракция)»; «Все игроки» — последней
+  // вкладка на каждого игрока — аватарка и «Имя (Фракция)»; «Все игроки» — последней. На телефоне те же
+  // вкладки стоят в нижней полосе, между «Решением» и «Журналом» (там — коротко: аватарка и имя)
   buildBoardTabs() {
-    const tabs = this.static.names.map((_, p) => h("button", { type: "button", onclick: () => this.openBoard(p) },
-      `${C.nameOf(this.static, p, true)}`));
-    tabs.push(h("button", { type: "button", onclick: () => this.openBoard("all") }, "Все игроки"));
-    $("board-tabs").replaceChildren(...tabs);
-    this.markBoardTab();
+    const seats = [...this.static.names.keys(), "all"];
+    const open = (tab) => () => {
+      this.openBoard(tab);
+      this.setView("boards");
+    };
+    $("board-tabs").replaceChildren(...seats.map((tab) => h("button", { type: "button", "data-board": tab, onclick: open(tab) },
+      tab === "all" ? "Все игроки" : C.nameOf(this.static, tab, true))));
+    for (const b of document.querySelectorAll("#tabs button[data-board]")) b.remove();
+    $("tabs").lastElementChild.before(...seats.map((tab) => h("button.board-tab", { type: "button", "data-view": "boards", "data-board": tab,
+      title: tab === "all" ? "Все игроки" : C.nameOf(this.static, tab), onclick: open(tab) },
+    tab === "all" ? h("span.tab-name", "Все") : [mark(`avatar${tab}`), h("span.tab-name", this.static.names[tab])])));
+    this.markTabs();
   }
 
-  markBoardTab() {
-    const buttons = [...$("board-tabs").children];
-    buttons.forEach((b, i) => b.classList.toggle("active", i === (this.boardTab === "all" ? buttons.length - 1 : this.boardTab)));
+  // выделить открытую вкладку: в нижней полосе — вид экрана (а у планшетов — ещё и чей), над планшетом — чей
+  markTabs() {
+    const view = document.body.dataset.view, board = String(this.boardTab);
+    for (const b of document.querySelectorAll("#tabs button")) {
+      b.classList.toggle("active", b.dataset.view === view && (view !== "boards" || b.dataset.board === board));
+    }
+    for (const b of $("board-tabs").children) b.classList.toggle("active", b.dataset.board === board);
   }
 
   // открыта вкладка игрока — его планшет и его карта; «Все игроки» — карта остаётся прежней
   openBoard(p) {
     this.boardTab = p;
     if (p !== "all") this.boardPlayer = p;
-    this.markBoardTab();
+    this.markTabs();
     $("board").scrollTop = 0;
     if (this.state && this.static) this.refresh();
   }
@@ -444,7 +457,7 @@ class App {
     if (this.boardPlayer !== m.player) {   // решают на своей карте и своём планшете (сводку «Все игроки» не закрываем)
       this.boardPlayer = m.player;
       if (this.boardTab !== "all") this.boardTab = m.player;
-      this.markBoardTab();
+      this.markTabs();
       if (this.state) this.refresh();
     }
     this.clearDecision();
@@ -458,8 +471,7 @@ class App {
     this.setStatus("Ваше решение");
     document.body.classList.add("my-turn");
     this.title();
-    // на телефоне решение — на своей вкладке; карта остаётся, если выбирают регион на ней
-    if (document.body.dataset.view !== "map" || !this.panel.usesMap) this.setView("decision");
+    this.setView("decision");   // на телефоне решение — на своей вкладке (карта видна всегда)
     if (document.visibilityState !== "visible" || !this.wasPending) navigator.vibrate?.(120);
     this.wasPending = true;
   }

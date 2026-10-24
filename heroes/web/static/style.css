@@ -219,9 +219,12 @@ table.game-table tr.you td { font-weight: bold; }
   border-top: 1px solid var(--line);
   padding-bottom: var(--safe-bottom);
 }
-#tabs button { flex: 1 1 0; border: 0; border-radius: 0; background: none; padding: 0 4px; min-height: 48px; color: var(--muted); }
+#tabs button { flex: 1 1 0; min-width: 0; border: 0; border-radius: 0; background: none; padding: 0 2px; min-height: 48px; color: var(--muted);
+  font-size: 0.78rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+#tabs .board-tab img.ic-avatar { height: 1.5em; margin: 0; vertical-align: 0; }
+#tabs .tab-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #tabs button.active { color: var(--accent); font-weight: bold; box-shadow: inset 0 3px 0 var(--accent); }
-#tabs .dot { display: none; width: 8px; height: 8px; margin-left: 4px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
+#tabs .dot { display: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 body.my-turn #tabs .dot { display: inline-block; }
 
 /* --- решение -------------------------------------------------------------------------------- */
@@ -266,7 +269,7 @@ table.scores tr.total { font-weight: bold; border-top: 1px solid var(--line); }
 body:not([data-view="decision"]) #decision-pane,
 body:not([data-view="boards"]) #boards-pane,
 body:not([data-view="log"]) #log-pane { visibility: hidden; pointer-events: none; }
-body[data-view="map"] #main { grid-template-rows: 1fr 0; }
+#board-tabs { display: none; }   /* на телефоне вкладки планшетов — в нижней полосе */
 #log-toggle, .log-head button { display: none; }
 #order .upcoming { display: none; }
 
@@ -279,7 +282,6 @@ body[data-view="map"] #main { grid-template-rows: 1fr 0; }
     grid-template-rows: 1fr;
     grid-template-areas: "map pane";
   }
-  body[data-view="map"] #main { grid-template-columns: 1fr 0; grid-template-rows: 1fr; }
   /* вкладки — колонкой справа от всего, чтобы не съедать высоту */
   #game {
     grid-template-columns: 1fr auto;
@@ -301,6 +303,7 @@ body[data-view="map"] #main { grid-template-rows: 1fr 0; }
     grid-template-areas: "bar" "order" "banner" "main";
   }
   #tabs { display: none; }
+  #board-tabs { display: flex; }
   #log-toggle { display: inline-block; }
   #order .upcoming { display: inline; }
   #main {

@@ -378,7 +378,7 @@ def test_tips(browser):
         browser.wait_for("window.app")
         browser.evaluate(f"app.handle({json.dumps(recorder.sync)}); app.handle({json.dumps(recorder.decision)}); 1")
         browser.wait_for("app.map.geometry")
-        browser.evaluate("app.setView('map'); 1")
+        browser.evaluate("app.setView('decision'); 1")   # карта на телефоне видна всегда
         browser.wait_for("app.map.k > 0")
         time.sleep(0.5)   # карта подстраивается под размер панели
         # тап по рисунку артефакта: касание (pointerdown), тап карты, следом щелчок браузера
