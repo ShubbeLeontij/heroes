@@ -14,6 +14,7 @@ const SELECT = "#e8590c";
 const CHOSEN = "#a61e1e";
 const MARKER = "#3a3631";         // «маркер», которым игрок пишет на своей карте
 const LAKE = "#3d8fd1";
+const FADED = 0.4;                // прозрачность недоступных объектов (захваченная крепость, взятый артефакт, чужая бронь)
 const OLD_ROUTE = "#8f887c";
 const TERRAINS = ["field", "forest", "mountain", "lake"];   // порядок, как на дорожке перемещения планшета
 const MOVE_SECONDS = 1.0;
@@ -43,10 +44,13 @@ function inside(x, y, polygon) {
   return hit;
 }
 
-export function objectShown(state, region, kind) {
-  if (kind === "fortress") return !(region in state.fortress_owner);
-  if (kind === "artifact") return !(region in state.artifact_holder);
-  return true;
+// как виден объект региона: "shown" или "faded" — полупрозрачный, недоступен (захваченная крепость, взятый
+// артефакт, чужая бронь Башней иллюзий; подсказка объясняет почему)
+export function objectLook(state, region, kind, you = null) {
+  if (kind === "fortress" && region in state.fortress_owner) return "faded";
+  if (kind === "artifact" && region in state.artifact_holder) return "faded";
+  if (region in state.reserved && state.reserved[region] !== you) return "faded";
+  return "shown";
 }
 
 const now = () => performance.now() / 1000;
@@ -269,7 +273,7 @@ export class MapView {
     if (!this.pointers.has(e.pointerId)) {
       if (e.pointerType === "mouse") {
         this.setHover(this.regionAt(at), this.tokenAt(at));
-        this.artifactTip(at);
+        this.objectTip(at);
       }
       return;
     }
@@ -338,28 +342,31 @@ export class MapView {
       this.onSelect(region);
       this.redraw();
     } else {
-      this.artifactTip(at);   // касание: тап по рисунку артефакта — подсказка о нём
+      this.objectTip(at);   // касание: тап по рисунку артефакта или крепости — подсказка о нём
     }
   }
 
-  // рисунок артефакта, который сейчас лежит на карте, под точкой at
-  artifactAt(at) {
+  // объект, нарисованный на карте под точкой at, и что о нём подсказать: артефакт — всё о нём, крепость
+  // и недоступный объект (чужая бронь) — каков он и почему недоступен
+  tipAt(at) {
     if (!this.geometry || !this.static || !this.state) return null;
     const [x, y] = this.toWorld(at).map((v) => v / this.scaleFactor);
     for (const [name, r] of Object.entries(this.regions)) {
-      if (this.static.regions[name].object !== "artifact" || !this.state.available.includes(name)
-        || !objectShown(this.state, name, "artifact")) continue;
+      const kind = this.static.regions[name].object;
+      const look = this.state.available.includes(name) ? objectLook(this.state, name, kind, this.you) : null;
       const [x0, y0, x1, y1] = r.object;
-      if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return name;
+      if (!look || x < x0 || x > x1 || y < y0 || y > y1) continue;
+      if (kind === "artifact") return `artifact|${name}`;
+      return kind === "fortress" || look === "faded" ? `object|${name}` : null;
     }
     return null;
   }
 
-  artifactTip(at) {
-    const region = this.artifactAt(at);
-    if (region) {
+  objectTip(at) {
+    const spec = this.tipAt(at);
+    if (spec) {
       const box = this.container.getBoundingClientRect();
-      showTipAt(`artifact|${region}`, box.left + at[0], box.top + at[1], this.container);
+      showTipAt(spec, box.left + at[0], box.top + at[1], this.container);
     } else if (tipOwner() === "map") {
       hideTip();
     }
@@ -452,16 +459,18 @@ export class MapView {
     this.svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     this.svg.setAttribute("width", W);
     this.svg.setAttribute("height", H);
-    // объекты, которые ещё на месте: кусочки слоя объектов
-    const clip = svg("clipPath", { id: "objects-clip" });
+    // объекты, которые ещё на месте: кусочки слоя объектов; недоступные — полупрозрачными
+    const clips = { shown: svg("clipPath", { id: "objects-clip" }), faded: svg("clipPath", { id: "objects-faded" }) };
     for (const name of Object.keys(this.regions)) {
-      if (available.has(name) && objectShown(state, name, kinds[name])) {
-        const [x0, y0, x1, y1] = this.regions[name].object.map((v) => v * this.scaleFactor);
-        clip.append(svg("rect", { x: x0 - 1, y: y0 - 1, width: x1 - x0 + 3, height: y1 - y0 + 3 }));
-      }
+      const look = available.has(name) ? objectLook(state, name, kinds[name], this.you) : null;
+      if (!look) continue;
+      const [x0, y0, x1, y1] = this.regions[name].object.map((v) => v * this.scaleFactor);
+      clips[look].append(svg("rect", { x: x0 - 1, y: y0 - 1, width: x1 - x0 + 3, height: y1 - y0 + 3 }));
     }
-    this.svg.append(svg("defs"), svg("image", { href: `${ASSETS}/objects_${WIDTH}.png`, width: W, height: H, "clip-path": "url(#objects-clip)" }));
-    this.svg.firstChild.append(clip);
+    const layer = { href: `${ASSETS}/objects_${WIDTH}.png`, width: W, height: H };
+    this.svg.append(svg("defs"), svg("image", { ...layer, "clip-path": "url(#objects-clip)" }),
+      svg("image", { ...layer, "clip-path": "url(#objects-faded)", opacity: FADED }));
+    this.svg.firstChild.append(clips.shown, clips.faded);
     for (const [name, terrain] of Object.entries(state.terrain || {})) {   // Гейзер: регион теперь озёрный
       if (available.has(name) && terrain !== static_.regions[name].terrain) {
         this.svg.append(svg("polygon", { points: this.poly(name), fill: LAKE, "fill-opacity": 0.3, stroke: LAKE,
@@ -536,7 +545,7 @@ export class MapView {
       this.text(cx, y, res(r.resources, got), small, "n", got ? "faded" : cls);
       y += small * 1.25;
     }
-    if (r.object === "fortress" && objectShown(state, name, "fortress")) this.fortress(name, r.fortress);
+    if (r.object === "fortress") this.fortress(name, r.fortress, objectLook(state, name, "fortress", this.you) === "faded");
     // фишки игроков — аватарки (обводка: чёрная — чья это карта, белая — остальные); гидры — рисунок гидры
     const here = [];
     state.players.forEach((pl, p) => { if (pl.region === name) here.push(`player:${p}`); });
@@ -579,24 +588,25 @@ export class MapView {
   }
 
   // слева от крепости, как на планшете: над чертой — сила, под ней — ПО и добыча
-  fortress(name, fortress) {
+  fortress(name, fortress, faded = false) {
     const [ox0, oy0, , oy1] = this.regions[name].object;
     const [right, mid] = this.xy([ox0 - 4, (oy0 + oy1) / 2 + 2]);
     const big = this.size(21, 11), small = this.size(17, 10);
-    const top = this.text(right, mid - 2, `${fortress.strength}${mark("shield")}`, big, "se", "strong");
+    const cls = faded ? "strong gone" : "strong";
+    const top = this.text(right, mid - 2, `${fortress.strength}${mark("shield")}`, big, "se", cls);
     const loot = Object.entries(fortress.loot).map(([k, v]) => res({ [k]: v }));
     let y = mid + 3;
-    const bottom = this.text(right, y, `${fortress.vp}${mark("laurel")}  ${loot[0] || ""}`, small, "ne", "strong");
+    const bottom = this.text(right, y, `${fortress.vp}${mark("laurel")}  ${loot[0] || ""}`, small, "ne", cls);
     for (const more of loot.slice(1)) {
       y += small * 1.25;
-      this.text(right, y, more, small, "ne", "strong");
+      this.text(right, y, more, small, "ne", cls);
     }
     // черта — по ширине надписей: её дорисуем, когда браузер их разместит
     requestAnimationFrame(() => {
       if (!top.isConnected) return;
       const width = Math.max(top.offsetWidth, bottom.offsetWidth);
       this.svg.append(svg("line", { x1: right - width - 2, y1: mid, x2: right + 2, y2: mid, stroke: "var(--ink)",
-        "stroke-width": this.size(2, 1) }));
+        "stroke-width": this.size(2, 1), opacity: faded ? FADED : 1 }));
     });
   }
 

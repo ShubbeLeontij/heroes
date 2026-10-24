@@ -395,6 +395,32 @@ def test_tips(browser):
         browser.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));"
                          "document.getElementById('order').click(); 1")   # тап мимо — закрыть
         assert browser.evaluate(tip) is None
+        # захваченная крепость, взятый артефакт и чужая бронь — полупрозрачные, подсказка — почему недоступны
+        blocked = """(() => { const m = app.map, avail = app.state.available;
+            const find = (kind) => Object.keys(m.regions).find((n) => app.static.regions[n].object === kind && avail.includes(n));
+            const fort = find("fortress"), found = find("foundation"), art = find("artifact");
+            for (const st of new Set([app.state, m.state])) {
+              st.fortress_owner = { ...st.fortress_owner, [fort]: 1 };
+              st.reserved = { ...st.reserved, [found]: 1 };
+              st.artifact_holder = { ...st.artifact_holder, [art]: 1 };
+            }
+            m.redraw();
+            const at = (n) => { const [x0, y0, x1, y1] = m.regions[n].object.map((v) => v * m.scaleFactor);
+              return [m.tx + (x0 + x1) / 2 * m.k, m.ty + (y0 + y1) / 2 * m.k]; };
+            const faded = document.querySelectorAll("#objects-faded rect").length;
+            m.objectTip(at(fort));
+            const fortTip = document.querySelector(".tip").textContent;
+            m.objectTip(at(found));
+            const foundTip = document.querySelector(".tip").textContent;
+            m.objectTip(at(art));
+            return [faded, fortTip, foundTip, document.querySelector(".tip").textContent]; })()"""
+        faded, fort_tip, found_tip, art_tip = browser.evaluate(blocked)
+        assert faded == 3
+        assert "✗ взят: Боря" in art_tip, art_tip
+        assert "✗ захвачена: Боря" in fort_tip, fort_tip
+        assert "✗ бронь: Боря (Башня иллюзий)" in found_tip, found_tip
+        browser.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));"
+                         "document.getElementById('order').click(); 1")
         touch_click = "document.body.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));" \
                       "document.querySelector('#board .card.monster').click(); 1"
         browser.evaluate("app.setView('boards'); 1")

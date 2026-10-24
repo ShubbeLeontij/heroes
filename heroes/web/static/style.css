@@ -351,6 +351,7 @@ body:not([data-view="log"]) #log-pane { visibility: hidden; pointer-events: none
 .mapview [data-anchor="se"] { transform: translate(-100%, -100%); }
 .mapview .maptext.dim { color: var(--muted); }
 .mapview .maptext.faded { color: var(--muted); }
+.mapview .maptext.gone { opacity: 0.4; }   /* недоступная крепость */
 .mapview .maptext.badge { color: white; text-shadow: none; padding: 0 0.45em; border-radius: 0.3em; }
 .mapview .maptext.square { color: white; text-shadow: none; }
 .mapview .maptext.level { color: #3a3631; }

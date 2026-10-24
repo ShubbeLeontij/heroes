@@ -320,21 +320,26 @@ function artifactCost(static_, faction, region) {
 
 // --- подсказки (tips.js): артефакт, чудовище, ресурсы ----------------------------------------------
 
-export function tipContent(static_, state, kind, args) {
-  if (kind === "artifact") return artifactTip(static_, state, args[0]);
+export function tipContent(static_, state, kind, args, you = null) {
+  if (kind === "artifact") return artifactTip(static_, state, args[0], you);
+  if (kind === "object") return objectTip(static_, state, args[0], you);
   if (kind === "monster") return monsterTip(static_, state, Number(args[0]), Number(args[1]));
   if (kind === "stock") return stockTip(static_, state, args[0]);
   return null;
 }
 
+const who = (static_, p) => mark(`avatar${p}`) + static_.names[p];   // коротко: аватарка и имя
 const tipRow = (static_, p, ...lines) => h("div.tip-row", { style: { "--seat": color(p) } }, h("b", nameOf(static_, p, true)), lines);
 
 // регион, у кого артефакт, и для каждого игрока: цена или условие, сколько уже есть, что даёт
-function artifactTip(static_, state, region) {
+function artifactTip(static_, state, region, you) {
   if (!(region in static_.regions)) return null;
-  const holder = state.artifact_holder[region];
-  const status = holder !== undefined ? `у игрока ${nameOf(static_, holder, true)}`
-    : region in state.reserved ? `бронь: ${nameOf(static_, state.reserved[region], true)}` : "свободен";
+  const holder = state.artifact_holder[region], reserver = state.reserved[region];
+  let status = h("div.muted", "свободен");   // ✗ — почему недоступен
+  if (holder !== undefined) status = holder === you ? h("div.good", "✓ ваш") : h("div.bad", `✗ взят: ${who(static_, holder)}`);
+  else if (reserver !== undefined) {
+    status = reserver === you ? h("div.good", "✓ ваша бронь (Башня иллюзий)") : h("div.bad", `✗ бронь: ${who(static_, reserver)} (Башня иллюзий)`);
+  }
   const rows = state.players.map((pl, p) => {
     const faction = static_.factions[pl.faction];
     const effect = (faction.artifacts_board || faction.artifacts_ru || faction.artifacts)[region];
@@ -343,7 +348,26 @@ function artifactTip(static_, state, region) {
       effect ? h("div.small", markup(effect)) : null);
   });
   return h("div", h("div.tip-head", h("img.tip-picture", { src: picture(`artifact_${region}`), alt: "" }),
-    h("div", h("b", region), h("div.muted", status))), rows);
+    h("div", h("b", region), status)), rows);
+}
+
+// объект региона на карте и почему он недоступен: крепость захвачена (кем), объект забронирован Башней иллюзий (кем)
+function objectTip(static_, state, region, you) {
+  const r = static_.regions[region];
+  if (!r) return null;
+  const what = r.object === "fortress"
+    ? `крепость ${r.fortress.strength}${mark("shield")} → ${reward(r.fortress.vp, r.fortress.loot)}`
+    : `${mark(r.object)} ${UI.objects[r.object]}`;
+  const lines = [];   // ✗ — почему недоступен
+  if (r.object === "fortress" && region in state.fortress_owner) {
+    lines.push(h("div.bad", `✗ захвачена: ${who(static_, state.fortress_owner[region])}`));
+  }
+  if (region in state.reserved) {
+    const p = state.reserved[region];
+    lines.push(p === you ? h("div.good", "✓ ваша бронь (Башня иллюзий): доступно только вам")
+      : h("div.bad", `✗ бронь: ${who(static_, p)} (Башня иллюзий)`));
+  }
+  return h("div", h("b", region), h("div", what), lines.length ? lines : h("div.muted", "свободно"));
 }
 
 // чудовище на этом месте линии: у кого оно побеждено и что даёт (у наг — своя линия)
