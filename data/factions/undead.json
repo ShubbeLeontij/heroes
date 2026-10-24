@@ -20,6 +20,12 @@
       ]
     }
   },
+  "building_layout": [
+    [null, "shrine", "ossuary"],
+    [null, "chapel", "plague_pillar"],
+    ["crypt", "altar", "castle_ruins"],
+    ["barrow", "hearse", "graveyard"]
+  ],
   "buildings": {
     "barrow": {
       "name": "Курган", "level": 1, "vp": 0,

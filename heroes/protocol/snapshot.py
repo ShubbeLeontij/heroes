@@ -116,6 +116,7 @@ def static_data(game: Game) -> dict:
                                  "text_board": b.text_board or b.text_ru or b.text,
                                  "hires": [e["unit"] for e in b.effects if e["type"] == "hire"]}
                           for b in f.buildings.values()},
+            "building_layout": [list(row) for row in f.building_layout],   # клетки зданий, как на печатном планшете
             "artifacts": {region: a.text for region, a in f.artifacts.items()},
             "artifacts_ru": {region: a.text_ru or a.text for region, a in f.artifacts.items()},
             "artifacts_board": {region: a.text_board or a.text_ru or a.text for region, a in f.artifacts.items()},

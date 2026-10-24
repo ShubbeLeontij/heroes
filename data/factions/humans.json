@@ -7,6 +7,12 @@
     "knight":  {"name": "Латник", "strength": 3, "cost": {"gold": 3}, "start": 0},
     "archmage": {"name": "Архимаг", "strength": 5, "cost": {"gold": 5}, "start": 0}
   },
+  "building_layout": [
+    ["arsenal", "cathedral", "mages_guild"],
+    ["rangers_house", "tavern", "barracks"],
+    ["market", "illusion_tower", null],
+    [null, "town_hall", "warriors_guild"]
+  ],
   "buildings": {
     "town_hall": {
       "name": "Ратуша", "level": 1, "vp": 0,

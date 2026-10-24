@@ -44,6 +44,12 @@
       ]
     }
   },
+  "building_layout": [
+    ["lighthouse", "ocean_heart", null],
+    ["temple", "dam", null],
+    ["mine", "geyser", "ship"],
+    ["feeder", "palace", "reef"]
+  ],
   "buildings": {
     "lighthouse": {
       "name": "Маяк", "level": 1, "vp": 3,

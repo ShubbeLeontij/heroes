@@ -139,6 +139,8 @@ class Faction:
     rules: dict[str, Rule] = field(default_factory=dict)
     monsters: tuple[Monster, ...] | None = None    # своя линия чудовищ (наги) вместо общей
     artifact_conditions: dict[str, dict] = field(default_factory=dict)  # свои условия артефактов (наги)
+    # клетки зданий на печатном планшете: ряды сверху вниз, колонки слева направо, None — пустая клетка
+    building_layout: tuple[tuple[str | None, ...], ...] = ()
 
     def resource_units(self) -> set[str]:
         """Войска, которые служат и ресурсом: ими платят за здания и артефакты (краки наг)."""
@@ -236,7 +238,8 @@ def load_faction(faction_id: str, game_map: GameMap | None = None) -> Faction:
     }
     monsters = tuple(Monster(**m) for m in raw["monsters"]) if "monsters" in raw else None
     faction = Faction(raw["id"], raw["name"], dict(raw["movement"]), units, buildings, artifacts, rules, monsters,
-                      dict(raw.get("artifact_conditions", {})))
+                      dict(raw.get("artifact_conditions", {})),
+                      tuple(tuple(row) for row in raw["building_layout"]))
     errors = validate_faction(faction, game_map or load_map())
     if errors:
         raise DataError("; ".join(errors))
@@ -281,6 +284,13 @@ def validate_faction(faction: Faction, game_map: GameMap) -> list[str]:
         for req in b.requires:
             if req not in faction.buildings:
                 errors.append(f"{b.name}: unknown required building {req}")
+    placed = [bid for row in faction.building_layout for bid in row if bid is not None]
+    if sorted(placed) != sorted(faction.buildings):
+        errors.append("The building layout must place every building exactly once")
+    # ряд планшета — один уровень, уровни сверху вниз не растут
+    levels = [{faction.buildings[bid].level for bid in row if bid in faction.buildings} for row in faction.building_layout]
+    if any(len(lv) > 1 for lv in levels) or any(max(a) < min(b) for a, b in zip(levels, levels[1:]) if a and b):
+        errors.append("The building layout must keep one level per row, highest at the top")
     artifact_regions = {r.name for r in game_map.regions.values() if r.object == "artifact"}
     if set(faction.artifacts) != artifact_regions:
         errors.append("Faction artifacts do not match the artifact regions on the map")

@@ -6,7 +6,6 @@ import { UI, artifactMark, h, mark, markup, rich } from "./rich.js";
 import { artifactCondition, color, CONDITION_MARKS, conditionIcons, monsterLine, nameOf, res, reward } from "./common.js";
 import { tipAttr } from "./tips.js";
 
-const MAX_COLUMNS = 5;
 const WIDE_COLUMN = 128;     // уже — колонки печатного планшета не помещаются: карточки по две в ряд
 const CATEGORIES = { buildings: "здания", foundations: "фундаменты", resources: "склад", battles: "сражения", artifacts: "артефакты" };
 const CATEGORY_MARKS = { foundations: "foundation", battles: "victory", artifacts: "artifact" };   // остальные — словом
@@ -29,31 +28,6 @@ function strengthParts(unit, base) {
     parts.push([mark("modify"), ""], [`${m.value}${power}${note}`, m.active ? "" : "off"]);
   }
   return parts;
-}
-
-// колонки зданий, как на печатном планшете (boardview.building_columns)
-export function buildingColumns(buildings) {
-  const columns = {};
-  for (const level of [4, 3, 2, 1]) {
-    const taken = new Set();
-    const row = Object.keys(buildings).filter((bid) => buildings[bid].level === level);
-    for (const bid of row) {
-      const wanted = Object.entries(buildings).filter(([d, b]) => b.requires.includes(bid) && d in columns).map(([d]) => columns[d]);
-      const free = wanted.filter((col) => !taken.has(col));
-      if (free.length) {
-        columns[bid] = free[0];
-        taken.add(free[0]);
-      }
-    }
-    for (const bid of row) {
-      if (bid in columns) continue;
-      let col = 0;
-      while (taken.has(col)) col++;
-      columns[bid] = col;
-      taken.add(col);
-    }
-  }
-  return columns;
 }
 
 export class BoardView {
@@ -195,40 +169,32 @@ export class BoardView {
 
   buildings(pl, faction) {
     const buildings = faction.buildings, built = new Set(pl.built), can = new Set(pl.buildable);
-    const columns = buildingColumns(buildings);
-    const cols = Math.max(0, ...Object.values(columns)) + 1;
+    const layout = faction.building_layout;   // клетки печатного планшета: ряды сверху вниз, null — пустая клетка
+    const cols = Math.max(1, ...layout.map((row) => row.length));
     const picking = this.picking();
-    // колонки печатного планшета, если помещаются; иначе — по две в ряд
+    // клетки печатного планшета, если помещаются; иначе — по две в ряд в том же порядке
     const width = this.el.clientWidth || 360;
-    const wide = Math.min(cols, MAX_COLUMNS) * WIDE_COLUMN <= width - 24;
-    const wrap = cols > MAX_COLUMNS;
-    const grid = h("div.building-grid" + (wide ? ".wide" : ".narrow"), { style: { "--cols": wide ? Math.min(cols, MAX_COLUMNS) : 2 } });
+    const wide = cols * WIDE_COLUMN <= width - 24;
+    const grid = h("div.building-grid" + (wide ? ".wide" : ".narrow"), { style: { "--cols": wide ? cols : 2 } });
     this.cards = {};
-    let row = 1;
-    for (const level of [4, 3, 2, 1]) {
-      const ids = Object.keys(buildings).filter((bid) => buildings[bid].level === level).sort((a, b) => columns[a] - columns[b]);
-      const step = wide && wrap ? MAX_COLUMNS : ids.length || 1;
-      for (let start = 0; start < ids.length; start += step) {
-        ids.slice(start, start + step).forEach((bid, i) => {
-          const b = buildings[bid];
-          const state = built.has(bid) ? "built" : can.has(bid) ? "can" : "locked";
-          const selectable = picking && this.pick.options.has(bid);
-          const needs = !wide && b.requires.length ? h("small.muted", "нужно: " + b.requires.map((r) => buildings[r].name).join(", ")) : null;
-          const card = h(`div.card.building.${state}` + (selectable ? ".selectable" : "") + (selectable && bid === this.pick.selected ? ".picked" : ""),
-            { onclick: selectable ? () => this.pickBuilding(bid) : null },
-            h("b", `${UI.levels[level]} ${b.name}` + (built.has(bid) ? " ✓" : "")),
-            h("small.muted", `${b.vp}${mark("laurel")} · цена ${res(b.cost)}`),
-            h("p", markup(b.text_board || b.text_ru || b.text)), needs);
-          if (wide) {
-            card.style.gridColumn = String((wrap ? i : columns[bid]) + 1);
-            card.style.gridRow = String(row);
-          }
-          this.cards[bid] = card;
-          grid.append(card);
-        });
-        row++;
+    layout.forEach((row, r) => row.forEach((bid, c) => {
+      if (bid === null) return;
+      const b = buildings[bid];
+      const state = built.has(bid) ? "built" : can.has(bid) ? "can" : "locked";
+      const selectable = picking && this.pick.options.has(bid);
+      const needs = !wide && b.requires.length ? h("small.muted", "нужно: " + b.requires.map((q) => buildings[q].name).join(", ")) : null;
+      const card = h(`div.card.building.${state}` + (selectable ? ".selectable" : "") + (selectable && bid === this.pick.selected ? ".picked" : ""),
+        { onclick: selectable ? () => this.pickBuilding(bid) : null },
+        h("b", `${UI.levels[b.level]} ${b.name}` + (built.has(bid) ? " ✓" : "")),
+        h("small.muted", `${b.vp}${mark("laurel")} · цена ${res(b.cost)}`),
+        h("p", markup(b.text_board || b.text_ru || b.text)), needs);
+      if (wide) {
+        card.style.gridColumn = String(c + 1);
+        card.style.gridRow = String(r + 1);
       }
-    }
+      this.cards[bid] = card;
+      grid.append(card);
+    }));
     this.arrowLayer = wide ? h("div.arrows") : null;
     this.arrowsFor = wide ? { buildings, built } : null;
     const wrapEl = h("div.building-wrap", grid, this.arrowLayer);

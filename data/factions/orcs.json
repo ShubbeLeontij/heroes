@@ -27,6 +27,12 @@
       ]}]
     }
   },
+  "building_layout": [
+    ["trophy_hall", "metal_shop", "workshop"],
+    ["chiefs_house", "pen", "gym"],
+    ["dump", "arena", "camp"],
+    ["war_idol", null, null]
+  ],
   "buildings": {
     "war_idol": {
       "name": "Идол войны", "level": 1, "vp": 0,

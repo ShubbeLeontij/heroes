@@ -7,6 +7,12 @@
     "griffin": {"name": "Грифон", "strength": 3, "cost": {"gold": 3}, "start": 0},
     "ent":     {"name": "Энт", "strength": 6, "cost": {"gold": 5}, "start": 0}
   },
+  "building_layout": [
+    ["guiding_forest", "druid_house", "great_tree"],
+    ["wooded_cliff", "observatory", "watch"],
+    [null, "armorer", "aerie"],
+    ["forge", null, "pixie_thicket"]
+  ],
   "buildings": {
     "forge": {
       "name": "Горн", "level": 1, "vp": 0,

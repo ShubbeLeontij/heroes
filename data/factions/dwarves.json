@@ -20,6 +20,12 @@
       ]
     }
   },
+  "building_layout": [
+    [null, "bank", "factory"],
+    ["laboratory", "conveyor", "workshop"],
+    ["gatherers", "library", "manufactory"],
+    ["generator", null, "academy"]
+  ],
   "buildings": {
     "generator": {
       "name": "Генератор", "level": 1, "vp": 0,
