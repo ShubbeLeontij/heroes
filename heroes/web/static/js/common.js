@@ -12,10 +12,9 @@ export function res(resources, faded = false) {
     .map(([k, v]) => `${v}${mark(faded ? k + "_off" : k)}`).join(" ") || "—";
 }
 
-// «дерево 2, золото 1» — без склонений, как на складе
-export function resLong(resources) {
-  return Object.entries(resources || {}).filter(([, v]) => v)
-    .map(([k, v]) => `${UI.resources[k] || k} ${v}`).join(", ") || "ничего";
+// награда крепости или чудовища: «3» + лавр ПО и добыча значками
+export function reward(vp, loot) {
+  return `${vp}${mark("laurel")}` + (Object.values(loot || {}).some(Boolean) ? ` + ${res(loot)}` : "");
 }
 
 export function plural(n, one, few, many) {
@@ -24,13 +23,12 @@ export function plural(n, one, few, many) {
   return many;
 }
 
-export function conditionText(cond) {
-  if (cond.condition === "pay") return `заплатить: ${resLong(cond.cost)}`;
-  return {
-    foundationsBuilt: `${cond.count} фундамента с вашими зданиями`,
-    battleWins: `${cond.count} побед в сражениях`,
-    mountainsVisited: `посещено ${cond.count} горных региона`,
-  }[cond.condition];
+// условие артефакта значками, как на планшете: цена или сколько нужно фундаментов, побед, гор
+export const CONDITION_MARKS = { foundationsBuilt: "foundation", battleWins: "victory", mountainsVisited: "mountain" };
+
+export function conditionIcons(cond) {
+  if (cond.condition === "pay") return res(cond.cost);
+  return `${cond.count}${mark(CONDITION_MARKS[cond.condition])}`;
 }
 
 // «Аня (Люди)»; avatar — с меткой аватарки впереди
@@ -107,20 +105,20 @@ export function objectText(static_, state, region, faction = null) {
   let text;
   if (obj === "fortress") {
     const f = r.fortress;
-    text = `крепость, сила ${f.strength} → ${f.vp} ПО + ${resLong(f.loot)}`;
+    text = `крепость ${f.strength}${mark("shield")} → ${reward(f.vp, f.loot)}`;
     if (region in state.fortress_owner) text += `; захвачена: ${nameOf(static_, state.fortress_owner[region])}`;
   } else if (obj === "artifact") {
-    text = `артефакт (${conditionText(faction ? artifactCondition(static_, faction, region) : r.artifact)})`;
+    text = `${mark("artifact")} ${conditionIcons(faction ? artifactCondition(static_, faction, region) : r.artifact)}`;
     if (region in state.artifact_holder) text += `; у игрока ${nameOf(static_, state.artifact_holder[region])}`;
   } else if (obj === "foundation") {
-    const levels = state.players.map((pl, p) => (pl.foundations[region] ? `${nameOf(static_, p)} ${pl.foundations[region]}` : null))
+    const levels = state.players.map((pl, p) => (pl.foundations[region] ? `${nameOf(static_, p)} ${UI.levels[pl.foundations[region]]}` : null))
       .filter(Boolean);
-    text = "фундамент" + (levels.length ? ` (уровни: ${levels.join(", ")})` : "");
+    text = mark("foundation") + (levels.length ? ` ${levels.join(", ")}` : "");
   } else {
-    text = "портал (все порталы соседствуют друг с другом)";
+    text = `${mark("portal")} (все порталы соседствуют друг с другом)`;
   }
   if (region in state.reserved) text += `; бронь: ${nameOf(static_, state.reserved[region])} (Башня иллюзий)`;
-  if (region in (state.cursed || {})) text += `; проклят: ${nameOf(static_, state.cursed[region])}`;
+  if (region in (state.cursed || {})) text += `; ${mark("curse")} ${nameOf(static_, state.cursed[region])}`;
   return text;
 }
 

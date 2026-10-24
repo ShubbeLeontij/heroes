@@ -348,7 +348,7 @@ class App {
       else st.action_order.forEach((a, i) => {
         const n = i + 1;
         const cls = phase === null || phase === undefined || n > phase ? "" : n === phase ? ".current" : ".done";
-        chips.push(h("span.chip" + cls, `${n}. ${UI.actions[a]}`));
+        chips.push(h("span.chip" + cls, { title: UI.actions[a] }, `${n}. `, icon(a)));
       });
     } else if (!this.ended) {
       chips.push(h("span.chip.current", "Выбор стартовых регионов"));

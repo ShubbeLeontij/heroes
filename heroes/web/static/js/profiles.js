@@ -2,7 +2,7 @@
 // и доигранные партии, по карточке на каждую. Запросы — POST /profiles (heroes/net/web.py: profile_request).
 // Партия попадает в профиль игрока с тем же именем после подсчёта очков; профиля нет — хозяин заводит его сам.
 
-import { h } from "./rich.js";
+import { h, mark } from "./rich.js";
 
 const MAX_AVATAR = 300_000;   // heroes/profiles.py: MAX_AVATAR (base64)
 const AVATAR_SIZE = 128;
@@ -193,7 +193,7 @@ export class ProfilesScreen {
     };
     const s = profile.summary;
     const stats = s.games
-      ? `Партий: ${s.games} · Побед: ${s.wins} · Средние ПО: ${s.avg_vp.toFixed(1)} · Лучший результат: ${s.best_vp} ПО`
+      ? `Партий: ${s.games} · Побед: ${s.wins} · В среднем: ${s.avg_vp.toFixed(1)}${mark("laurel")} · Лучший результат: ${s.best_vp}${mark("laurel")}`
       : "Доигранных партий пока нет. Партия попадает сюда после подсчёта очков в конце 16-го раунда.";
     const games = [...profile.games].reverse();
     const known = Object.fromEntries(this.list.map((p) => [p.id, p]));
@@ -234,7 +234,7 @@ export class ProfilesScreen {
     return h("div.game-card",
       h("div.game-card-head", h("span.muted", `${dateText(game.date)} · игроков: ${players.length}`), h(`b.${cls}`, place)),
       h("table.game-table",
-        h("thead", h("tr", ["", "Игрок", "Фракция", "Номер хода", "ПО", ""].map((t) => h("th", t)))),
+        h("thead", h("tr", ["", "Игрок", "Фракция", "Номер хода", mark("laurel"), ""].map((t) => h("th", t)))),
         h("tbody", rows)));
   }
 }

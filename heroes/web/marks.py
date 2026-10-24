@@ -8,6 +8,7 @@ from __future__ import annotations
 NAMES = ["wood", "iron", "gold", "any", "shield", "laurel", "forest", "field", "lake", "mountain",
          "wood_off", "iron_off", "gold_off", "any_off", "mp", "build", "power", "artifact", "foundation", "victory",
          "modify", "avatar0", "avatar1", "avatar2", "avatar3",
-         "science", "rage", "note", "krak", "curse", "hydra"]   # особенности фракций (из памятки и правил)
+         "science", "rage", "note", "krak", "curse", "hydra",   # особенности фракций (из памятки и правил)
+         "move", "portal", "level1", "level2", "level3", "level4"]
 BASE = 0xE100
 MARKS = {name: chr(BASE + i) for i, name in enumerate(NAMES)}   # _off — бледные ресурсы

@@ -173,7 +173,7 @@ export class MapView {
     else if (this.you === this.viewer) return null;
     else reach = this.state.players[this.you].reach;
     if (!reach) return null;
-    return Object.fromEntries(Object.entries(reach).map(([r, cost]) => [r, cost ? `${cost} ОП` : "остаться"]));
+    return Object.fromEntries(Object.entries(reach).map(([r, cost]) => [r, cost ? `${cost}${mark("mp")}` : "остаться"]));
   }
 
   // табличка над фишкой: popup — [вид ("player" | "hydra"), место, подпись] от сервера (ru.popup)

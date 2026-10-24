@@ -397,7 +397,9 @@ button.helper { min-height: 34px; padding: 0 10px; font-size: 0.85rem; }
 .actions, .slots { display: flex; flex-wrap: wrap; gap: 6px; }
 button.action { touch-action: none; }
 button.action.pressed { background: var(--bar); color: var(--muted); }
-button.slot { min-width: 9em; background: white; color: var(--muted); border-style: dashed; touch-action: none; }
+button.action.pressed img.ic { opacity: 0.35; }
+button.action img.ic, button.slot img.ic, .drag-ghost img.ic { height: 1.9em; vertical-align: middle; }
+button.slot { min-width: 4.5em; background: white; color: var(--muted); border-style: dashed; touch-action: none; }
 button.slot.filled { background: #ffe8d6; color: var(--ink); border-style: solid; font-weight: bold; }
 button.slot.drop { background: #ffc9a3; border-width: 2px; }
 .drag-ghost { position: fixed; z-index: 50; pointer-events: none; padding: 6px 10px; border-radius: 8px; background: #ffe8d6; border: 1px solid var(--line); font-weight: bold; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }

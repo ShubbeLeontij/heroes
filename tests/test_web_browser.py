@@ -15,6 +15,7 @@ from heroes.engine import scoring
 from heroes.engine.game import Game
 from heroes.players.random_bot import RandomBot
 from heroes.protocol import render_text as R
+from heroes.web.marks import MARKS as M
 
 from browser import Browser
 
@@ -167,17 +168,17 @@ def test_summary_helpers(browser):
     elves = {"players": [elf], "artifact_holder": {}}
     elves_aerie = {"players": [{**elf, "built": ["aerie"]}], "artifact_holder": {}}
     checks = [  # [выражение JS над S (static) и состояниями, ожидаемое]
-        ["B.conditionProgress(S, st, 0, 'Цурт')", "13 / 12 ✓"],
-        ["B.conditionProgress(S, st, 0, 'Шог Ид')", "1 / 4"],
-        ["B.conditionProgress(S, st, 1, 'Содмур')", "5 / 5 ✓"],
-        ["B.conditionProgress(S, held, 1, 'Содмур')", "✦ взят"],
-        ["B.conditionProgress(S, held, 0, 'Содмур')", "0 / 5"],
-        ["B.conditionProgress(S, st, 2, 'Цурт')", "2 / 3 (краки)"],
-        ["B.conditionProgress(S, st, 2, 'Шог Ид')", "2 / 4"],
-        ["B.conditionProgress(S, elves, 0, 'Таскар')", "дерево 7/12 или 7/5, грифоны 3/5 (нет Гнездовья)"],
-        ["B.conditionProgress(S, elvesAerie, 0, 'Таскар')", "дерево 7/12 или 7/5, грифоны 3/5"],
-        ["B.conditionProgress(S, elvesAerie, 0, 'Цурт')", "железо 1/12 или дерево 7/4, грифоны 3/4"],
-        ["B.conditionProgress(S, elvesAerie, 0, 'Содмур')", "0 / 5 или дерево 7/3, грифоны 3/3 ✓"],
+        ["B.conditionProgress(S, st, 0, 'Цурт')", f"13/12{M['iron']} ✓"],
+        ["B.conditionProgress(S, st, 0, 'Шог Ид')", f"1/4{M['mountain']}"],
+        ["B.conditionProgress(S, st, 1, 'Содмур')", f"5/5{M['victory']} ✓"],
+        ["B.conditionProgress(S, held, 1, 'Содмур')", f"{M['artifact']} взят"],
+        ["B.conditionProgress(S, held, 0, 'Содмур')", f"0/5{M['victory']}"],
+        ["B.conditionProgress(S, st, 2, 'Цурт')", f"2/3{M['krak']}"],
+        ["B.conditionProgress(S, st, 2, 'Шог Ид')", f"2/4{M['mountain']}"],
+        ["B.conditionProgress(S, elves, 0, 'Таскар')", f"7/12{M['wood']} или 7/5{M['wood']}, грифоны 3/5 (нет Гнездовья)"],
+        ["B.conditionProgress(S, elvesAerie, 0, 'Таскар')", f"7/12{M['wood']} или 7/5{M['wood']}, грифоны 3/5"],
+        ["B.conditionProgress(S, elvesAerie, 0, 'Цурт')", f"1/12{M['iron']} или 7/4{M['wood']}, грифоны 3/4"],
+        ["B.conditionProgress(S, elvesAerie, 0, 'Содмур')", f"0/5{M['victory']} или 7/3{M['wood']}, грифоны 3/3 ✓"],
         ["C.nameOf(S, 1)", "Боря (Люди)"],
         ["C.turnOrder(S, {round: 0, first_player: 1})", [0, 2, 1]],   # старт: справа от первого, против часовой
         ["C.nextFirstPlayers(S, {round: 0, first_player: 1}, 3)", [[1, 1], [2, 2], [3, 0]]],

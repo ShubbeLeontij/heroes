@@ -20,10 +20,12 @@ RESOURCE_NAMES = {"wood": "дерево", "iron": "железо", "gold": "зо�
 ACTION_NAMES = {"wood": "Добыча дерева", "iron": "Добыча железа", "gold": "Добыча золота",
                 "move": "Перемещение", "build": "Строительство"}
 OBJECT_NAMES = {"fortress": "крепость", "foundation": "фундамент", "portal": "портал", "artifact": "артефакт"}
-OBJECT_GLYPHS = {"fortress": "⚔", "foundation": "▣", "portal": "◎", "artifact": "✦"}
-LEVELS = {1: "I", 2: "II", 3: "III", 4: "IV"}
-SCORE_NAMES = {"buildings": "здания и эффекты", "foundations": "фундаменты", "resources": "запасы ресурсов",
-               "battles": "победы в сражениях", "artifacts": "артефакты"}
+# значки объектов (у крепости своего значка в памятке нет — символ и подпись словом)
+OBJECT_GLYPHS = {"fortress": "⚔ крепость", "foundation": MARKS["foundation"], "portal": MARKS["portal"],
+                 "artifact": MARKS["artifact"]}
+LEVELS = {n: MARKS[f"level{n}"] for n in range(1, 5)}   # гвозди уровня здания, как в памятке
+SCORE_NAMES = {"buildings": "здания и эффекты", "foundations": MARKS["foundation"], "resources": "запасы ресурсов",
+               "battles": MARKS["victory"], "artifacts": MARKS["artifact"]}   # где есть значок — значком
 
 # чем занят игрок, пока принимает решение (state["thinking"]); {region} — регион, где он стоит
 DOING = {

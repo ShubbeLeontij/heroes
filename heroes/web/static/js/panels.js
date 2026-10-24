@@ -4,14 +4,12 @@
 // Для пальцев: счётчики — с кнопками «−/+», регионы — списком крупных строк (и тапом по карте),
 // порядок действий — тапами (на ПК — и перетаскиванием).
 
-import { UI, h, mark, rich } from "./rich.js";
-import { armyStrength, artifactText, buildingText, nameOf, objectText, plural, res, resLong, terrainOf,
+import { UI, h, icon, mark, rich } from "./rich.js";
+import { armyStrength, artifactText, buildingText, nameOf, objectText, plural, res, reward, terrainOf,
   upgradeGains } from "./common.js";
 
 const RESOURCES = ["wood", "iron", "gold"];
 const MAX_COMBINATIONS = 50_000;   // больше заявок cheapestArmy не перебирает
-const T = (key) => UI.terrains[key] || key;
-const R = (key) => UI.resources[key] || key;
 
 // --- общие элементы ------------------------------------------------------------------------------
 
@@ -169,7 +167,7 @@ class ArmyPicker {
       this.counters[uid] = new Counter(u.count, () => this.refresh());
       return h("tr", h("th", u.name), h("td.num", String(u.count)), h("td.num", strength), h("td", this.counters[uid].el));
     });
-    this.el.append(h("table.army-table", h("thead", h("tr", h("th", "Войско"), h("th", "Есть"), h("th", "Сила"), h("th", "Заявить"))),
+    this.el.append(h("table.army-table", h("thead", h("tr", h("th", "Войско"), h("th", "Есть"), h("th", mark("power")), h("th", "Заявить"))),
       h("tbody", rows)));
     if (upgrade && upgrade.max && upgradeGains(units, Object.fromEntries(Object.entries(units).map(([u, v]) => [u, v.count])), upgrade).length) {
       this.upgradeCounter = new Counter(0, () => this.refresh());
@@ -253,18 +251,18 @@ class ArmyPicker {
       cls = "bad";
     } else {
       const s = this.strength(), bonus = (this.rules || {}).bonus || 0;
-      text = `Заявленная сила: ${s}` + (bonus ? ` (с прибавкой +${bonus} к итогу)` : "");
+      text = `Заявлено: ${s}${mark("power")}` + (bonus ? ` (с прибавкой +${bonus}${mark("power")} к итогу)` : "");
       if (this.upgrades()) {
         const cost = Object.fromEntries(Object.entries(this.upgrade.cost_per_unit).map(([k, v]) => [k, v * this.upgrades()]));
-        text += `, модифицировано ${this.upgrades()} — заплатите ${resLong(cost)}`;
+        text += `, модифицировано ${this.upgrades()} — заплатите ${res(cost)}`;
       }
       if (this.need !== null) {
         const enough = s > this.need;
-        text += enough ? ` — хватает (нужно больше ${this.need})` : ` — НЕ хватает: нужно больше ${this.need}`;
+        text += enough ? ` — хватает (нужно больше ${this.need}${mark("shield")})` : ` — НЕ хватает: нужно больше ${this.need}${mark("shield")}`;
         cls = enough ? "good" : "bad";
       }
     }
-    this.summary.textContent = text;
+    this.summary.replaceChildren(rich(text));
     this.summary.className = "summary " + cls;
     if (this.onChange) this.onChange();
   }
@@ -382,7 +380,7 @@ class ChooseStart extends RegionChoice {
     const regions = this.static.regions, options = this.data.options;
     this.note("Стартовые регионы — с порталом. Ресурсы региона вы получите сразу. "
       + "Выберите регион на карте или в списке.");
-    const labels = Object.fromEntries(options.map((r) => [r, `${r} — ${T(regions[r].terrain)}, ресурсы: ${resLong(regions[r].resources)}`]));
+    const labels = Object.fromEntries(options.map((r) => [r, `${r} ${mark(regions[r].terrain)} ${res(regions[r].resources)}`]));
     this.ok = this.button("Начать здесь", () => this.confirm(), true);
     this.ok.disabled = true;
     this.regionList(options, labels, Object.fromEntries(options.map((r) => [r, res(regions[r].resources)])));
@@ -410,7 +408,7 @@ class ActionOrder extends Panel {
     this.buttons = {};
     const row = h("div.actions");
     for (const [a, label] of Object.entries(UI.actions)) {
-      const b = h("button.action", { type: "button" }, label);
+      const b = h("button.action", { type: "button", title: label, "aria-label": label }, icon(a));
       this.draggable(b, () => a, () => this.toggle(a));
       this.buttons[a] = b;
       row.append(b);
@@ -461,14 +459,15 @@ class ActionOrder extends Panel {
   refresh() {
     this.slots.forEach((slot, i) => {
       const a = this.order[i];
-      slot.textContent = `${i + 1}. ${a ? UI.actions[a] : "—"}`;
+      slot.replaceChildren(`${i + 1}. `, a ? icon(a) : "—");
+      slot.title = a ? UI.actions[a] : "";
       slot.classList.toggle("filled", Boolean(a));
     });
     const full = !this.order.includes(null);
     for (const [a, b] of Object.entries(this.buttons)) b.classList.toggle("pressed", this.order.includes(a));
     this.ok.disabled = !full;
     const skipped = Object.keys(UI.actions).filter((a) => !this.order.includes(a));
-    this.skipped.textContent = full ? `пропускается: ${UI.actions[skipped[0]].toLowerCase()}` : "";
+    this.skipped.replaceChildren(...(full ? ["пропускается: ", icon(skipped[0])] : []));
     const reach = this.data.reach;
     if (reach !== undefined && reach !== null) {
       const level = this.order.includes("move") ? String(this.order.indexOf("move") + 1) : null;
@@ -486,7 +485,7 @@ class ActionOrder extends Panel {
         if (!a) return;
         if (!ghost) {
           if (Math.abs(ev.clientX - start[0]) + Math.abs(ev.clientY - start[1]) < 8) return;
-          ghost = h("div.drag-ghost", UI.actions[a]);
+          ghost = h("div.drag-ghost", icon(a));
           document.body.append(ghost);
         }
         ghost.style.left = `${ev.clientX + 10}px`;
@@ -529,13 +528,13 @@ class DistributeResources extends Panel {
     const allowed = RESOURCES.filter((r) => (this.data.allowed || RESOURCES).includes(r));
     const why = this.message.reason_ru ?? this.data.reason ?? "";
     if (why) this.note(why.charAt(0).toUpperCase() + why.slice(1) + ".", "");
-    this.note(`Распределите ${this.amount}: ` + allowed.map(R).join(", ") + ".");
+    this.note(`Распределите ${this.amount}: ` + allowed.map((k) => mark(k)).join(" ") + ".");
     this.counters = {};
     const grid = h("div.res-grid");
     for (const k of allowed) {
       this.counters[k] = new Counter(this.amount, () => this.refresh());
-      grid.append(h("div.res-cell", h("b", mark(k), " ", R(k)), this.counters[k].el,
-        h("button.helper", { type: "button", onclick: () => this.allTo(k) }, `всё — ${R(k)}`)));
+      grid.append(h("div.res-cell", h("b", mark(k)), this.counters[k].el,
+        h("button.helper", { type: "button", onclick: () => this.allTo(k) }, `всё — ${mark(k)}`)));
     }
     this.summary = h("p.summary");
     this.body.append(grid, this.summary);
@@ -569,14 +568,14 @@ class BuildRecruit extends Panel {
     this.stock = data.resources;
     this.faction = this.static.factions[this.player.faction];
     this.units = this.faction.units;
-    this.note(`Склад: ${resLong(this.stock)}. Здание (одно за действие) и наём — в любом порядке, нанимать можно `
+    this.note(`Склад: ${res(this.stock)}. Здание (одно за действие) и наём — в любом порядке, нанимать можно `
       + "несколько раз: каждый шаг выполняется сразу, и его плоды (ярость, наука, ресурсы, новое здание "
       + "для найма) доступны следующему.");
     if (data.steps.length) this.note("Уже сделано: " + data.steps.map((s) => this.stepText(s)).join("; ") + ".", "");
     if (data.rejected) this.note(`✗ Шаг не выполнен: ${data.rejected.error}`, "bad");
     const f = data.foundation;
     if (f && !data.built) {
-      this.note(`Вы в регионе ${f.region} с фундаментом (вписан уровень ${f.level}): здание более `
+      this.note(`Вы в регионе ${f.region} с фундаментом (вписан ${UI.levels[f.level]}): здание более `
         + "высокого уровня возводится на нём автоматически и приносит столько ПО, каков его уровень.", "hint");
     }
     const cols = h("div.columns");
@@ -603,8 +602,8 @@ class BuildRecruit extends Panel {
         return `${this.units[a].name} → ${this.units[b].name} ×${n}`;
       }).join(", ");
     }
-    if (kind === "raise") return "повышено: " + Object.entries(value).map(([a, x]) => `${UI.actions[a]} +${x}`).join(", ");
-    return "куплена наука";
+    if (kind === "raise") return "повышено: " + Object.entries(value).map(([a, x]) => `${mark(a)} +${x}`).join(", ");
+    return `куплена ${mark("science")}`;
   }
 
   section(parent, title) {
@@ -633,8 +632,8 @@ class BuildRecruit extends Panel {
     const f = data.foundation;
     this.choice = new Radios([], () => this.chosen());
     for (const [bid, o] of Object.entries(data.options)) {
-      const extra = f && o.level > f.level ? ` (+${o.level} ПО на фундаменте)` : "";
-      this.choice.add(bid, `${o.name} — уровень ${o.level}, ${o.vp} ПО${extra}, цена ${res(o.cost)}`,
+      const extra = f && o.level > f.level ? ` (+${o.level}${mark("laurel")} на фундаменте)` : "";
+      this.choice.add(bid, `${o.name} — ${UI.levels[o.level]}, ${o.vp}${mark("laurel")}${extra}, цена ${res(o.cost)}`,
         buildingText(this.static, this.player.faction, bid));
     }
     frame.append(this.choice.el);
@@ -694,7 +693,7 @@ class BuildRecruit extends Panel {
     }
     const ok = Object.entries(total).every(([k, v]) => (this.stock[k] || 0) >= v);
     const some = Object.values(this.hireCounters).some((c) => c.value);
-    this.hireSummary.textContent = some ? `К оплате: ${resLong(total)}` : "";
+    this.hireSummary.replaceChildren(some ? rich(`К оплате: ${res(total)}`) : "");
     this.hireSummary.className = "summary " + (ok ? "" : "bad");
     this.hireOk.disabled = !(ok && some);
   }
@@ -702,7 +701,7 @@ class BuildRecruit extends Panel {
   // модификация орков
   upgradeSection(parent) {
     const d = this.data.upgrade;
-    const frame = this.section(parent, "Модификация войск за ярость");
+    const frame = this.section(parent, `Модификация войск за ${mark("rage")}`);
     frame.append(h("p.muted", "Модификация — не наём: зданий для найма не нужно."));
     this.upgradeCounters = {};
     const rows = Object.entries(d.paths).map(([key, path]) => {
@@ -730,15 +729,15 @@ class BuildRecruit extends Panel {
       units[path.to] = (units[path.to] || 0) + n;
       for (const [k, v] of Object.entries(path.cost)) spent[k] = (spent[k] || 0) + v * n;
     }
-    if (Object.entries(spent).some(([k, v]) => v > (this.stock[k] || 0))) return [null, `Не хватает: нужно ${resLong(spent)}`];
+    if (Object.entries(spent).some(([k, v]) => v > (this.stock[k] || 0))) return [null, `Не хватает: нужно ${res(spent)}`];
     const answer = Object.fromEntries(Object.entries(this.upgradeCounters).filter(([, c]) => c.value).map(([k, c]) => [k, c.value]));
-    return [answer, Object.values(spent).some(Boolean) ? `Потратите: ${resLong(spent)}` : ""];
+    return [answer, Object.values(spent).some(Boolean) ? `Потратите: ${res(spent)}` : ""];
   }
 
   refreshUpgrade() {
     if (!this.upgradeOk) return;
     const [answer, text] = this.checkUpgrade();
-    this.upgradeSummary.textContent = text;
+    this.upgradeSummary.replaceChildren(rich(text));
     this.upgradeSummary.className = "summary " + (answer !== null ? "" : "bad");
     this.upgradeOk.disabled = !(answer && Object.keys(answer).length);
   }
@@ -760,8 +759,8 @@ class BuildRecruit extends Panel {
   scienceSection(parent) {
     const d = this.data.science;
     const frame = this.section(parent, "Библиотека");
-    frame.append(h("p", `Один раз за строительство: ${resLong(d.cost)} → +${d.value} науки (сейчас ${d.science}).`));
-    this.stepButton(frame, "Купить науку", () => this.send([{ science: true }]));
+    frame.append(h("p", `Один раз за строительство: ${res(d.cost)} → +${d.value}${mark("science")} (сейчас ${d.science}${mark("science")}).`));
+    this.stepButton(frame, `Купить +${d.value}${mark("science")}`, () => this.send([{ science: true }]));
   }
 }
 
@@ -770,10 +769,10 @@ class ReserveObject extends RegionChoice {
 
   build() {
     const options = Object.keys(this.data.options).sort();
-    this.note(`Можно заплатить (${resLong(this.data.cost)}), чтобы объект в одном регионе — крепость, `
+    this.note(`Можно заплатить (${res(this.data.cost)}), чтобы объект в одном регионе — крепость, `
       + "артефакт, портал или фундамент — стал доступен только вам. Можно отказаться.");
     const labels = Object.fromEntries(options.map((r) => [r, `${r}: ${this.object(r)}`]));
-    const badges = Object.fromEntries(options.map((r) => [r, `${UI.glyphs[this.data.options[r]] || ""} ${UI.objects[this.data.options[r]] || ""}`]));
+    const badges = Object.fromEntries(options.map((r) => [r, UI.glyphs[this.data.options[r]] || UI.objects[this.data.options[r]] || ""]));
     this.ok = this.button("Забронировать", () => this.confirm(), true);
     this.ok.disabled = true;
     this.button("Отказаться", () => this.send(null));
@@ -790,7 +789,7 @@ class Destination extends RegionChoice {
   static secret = true;
 
   heading() {
-    return `Перемещение: ${this.data.mp} ОП из региона ${this.player.region}`;
+    return `Перемещение: ${this.data.mp}${mark("mp")} из региона ${this.player.region}`;
   }
 
   build() {
@@ -804,12 +803,12 @@ class Destination extends RegionChoice {
     const labels = {}, badges = {};
     for (const r of options) {
       const region = this.static.regions[r], info = opts[r];
-      const parts = [`${r}${r === here ? " (остаться)" : ""}`, `цена ${info.cost}, останется ${info.left} ОП`,
-        T(terrainOf(this.static, this.state, r)), this.object(r)];
+      const parts = [`${r}${r === here ? " (остаться)" : ""} ${mark(terrainOf(this.static, this.state, r))}`,
+        `цена ${info.cost}${mark("mp")}, останется ${info.left}${mark("mp")}`, this.object(r)];
       if (!this.player.visited.includes(r) && Object.keys(region.resources || {}).length) parts.push(`новый: ${res(region.resources)}`);
       if (others[r]) parts.push("сейчас там: " + others[r].join(", "));
       labels[r] = parts.join(" · ");
-      badges[r] = r === here ? "остаться" : `${info.cost} ОП`;
+      badges[r] = r === here ? "остаться" : `${info.cost}${mark("mp")}`;
     }
     this.note("Куда пошли остальные, станет известно, когда выберут все. Неистраченные очки перемещения "
       + "позволяют в этом раунде пропустить чудовищ в вашей линии.");
@@ -836,7 +835,7 @@ class RegionStance extends Panel {
       if (pl.region === region && q !== this.me) {
         const units = this.static.factions[pl.faction].units;
         const army = Object.entries(pl.units).filter(([, v]) => v.count).map(([u, v]) => `${units[u].name} ×${v.count}`).join(", ") || "войск нет";
-        this.playerNote(q, `: ${army} (общая сила ${pl.army_strength})`);
+        this.playerNote(q, `: ${army} (всего ${pl.army_strength}${mark("power")})`);
       }
     });
     const declared = this.data.declared || {};
@@ -844,7 +843,7 @@ class RegionStance extends Panel {
       this.note("Уже заявили:", "bold");
       for (const [q, s] of Object.entries(declared)) this.playerNote(q, ` — ${L[s].toLowerCase()}`, "bold");
     }
-    this.note(`Сила вашей армии: ${this.player.army_strength}. Сражение начнётся, если кто-то выберет `
+    this.note(`Сила вашей армии: ${this.player.army_strength}${mark("power")}. Сражение начнётся, если кто-то выберет `
       + "«сражаться» или на объект претендуют двое и больше. В сражении войска заявляются тайно, "
       + "все заявленные погибают.");
     for (const option of [...this.data.options].reverse()) {
@@ -863,11 +862,11 @@ class CommitArmy extends Panel {
   build() {
     const rules = this.data.opponent_rules || {};
     for (const [q, units] of Object.entries(this.data.opponents)) {
-      const desc = Object.values(units).map((u) => `${u.name} ×${u.count} (${u.strength})`).join(", ") || "войск нет";
-      this.playerNote(q, `: ${desc} — не больше ${armyStrength(units, null, rules[q])}`);
+      const desc = Object.values(units).map((u) => `${u.name} ×${u.count} (${u.strength}${mark("power")})`).join(", ") || "войск нет";
+      this.playerNote(q, `: ${desc} — не больше ${armyStrength(units, null, rules[q])}${mark("power")}`);
     }
     for (const [q, strength] of Object.entries(this.data.hydras || {})) {
-      this.playerNote(q, `: отдельная гидра, сила ${strength}. Награды в этом сражении не получит никто.`);
+      this.playerNote(q, `: отдельная гидра, ${strength}${mark("power")}. Награды в этом сражении не получит никто.`);
     }
     this.note("Побеждает наибольшая заявленная сила; при равенстве проигрывают все. Все заявленные войска "
       + "погибают при любом исходе. Можно никого не заявлять.");
@@ -888,12 +887,12 @@ class ChooseReward extends Panel {
   build() {
     const opts = this.data.options;
     this.kind = new Radios([], () => this.refresh());
-    if ("monster" in opts) this.kind.add("monster", `Награда обведённого чудовища: ${resLong(opts.monster)}`);
+    if ("monster" in opts) this.kind.add("monster", `Награда обведённого чудовища: ${res(opts.monster)}`);
     this.counters = {};
     if ("resources" in opts) {
       const amount = opts.resources.amount;
       this.kind.add("resources", `Забрать у проигравших до ${amount} ресурсов`);
-      const head = h("tr", h("th"), RESOURCES.map((k) => h("th", mark(k), " ", R(k))));
+      const head = h("tr", h("th"), RESOURCES.map((k) => h("th", mark(k))));
       const rows = Object.entries(opts.resources.from).map(([q, pool]) => {
         this.counters[q] = {};
         return h("tr", h("th", `${this.name(q, true)} (есть ${res(pool)})`), RESOURCES.map((k) => {
@@ -971,8 +970,8 @@ class CaptureFortress extends Panel {
 
   build() {
     const d = this.data, rules = d.strength_rules;
-    this.note(`Сила ${d.strength}. Награда: ${d.vp} ПО и ${resLong(d.loot)}. Ваша сила должна быть `
-      + `больше ${d.strength}; заявленные войска погибают при любом исходе.`, "");
+    this.note(`Крепость ${d.strength}${mark("shield")} → ${reward(d.vp, d.loot)}. Ваша сила должна быть `
+      + `больше ${d.strength}${mark("shield")}; заявленные войска погибают при любом исходе.`, "");
     this.picker = new ArmyPicker(d.units, d.strength, () => this.refresh(), rules, null, d.upgrade);
     this.body.append(this.picker.el);
     this.picker.preset(...(cheapestArmy(d.units, d.strength, rules, null, d.upgrade) || [{}, 0]));
@@ -998,7 +997,7 @@ class FightMonster extends Panel {
     this.upgrade = this.data.upgrade;
     const top = bestStrength(this.data.units, this.rules, this.apart, this.upgrade);
     this.note("Не больше одного чудовища за раунд. Неистраченные очки перемещения позволяют пропустить "
-      + `чудовищ в вашей линии. Ваша наибольшая сила: ${top}.`);
+      + `чудовищ в вашей линии. Ваша наибольшая сила: ${top}${mark("power")}.`);
     if (alone) {
       this.note(`Гидра стоит отдельно, в регионе ${alone.region}: она может сразиться вместо войска — одна; `
         + "добыча чудовища тогда теряется, гидра погибает.", "hint");
@@ -1006,8 +1005,7 @@ class FightMonster extends Panel {
     const keys = Object.keys(cands).sort((a, b) => Number(a) - Number(b));
     this.choice = new Radios(keys.map((key) => {
       const c = cands[key];
-      const reward = `${c.vp} ПО` + (Object.keys(c.loot || {}).length ? ` + ${resLong(c.loot)}` : "");
-      return [key, `Сила ${c.strength} → ${reward}${c.strength < top ? "" : " (не хватает силы)"}`];
+      return [key, `${c.strength}${mark("shield")} → ${reward(c.vp, c.loot)}${c.strength < top ? "" : " (не хватает силы)"}`];
     }), () => this.picked());
     this.body.append(this.choice.el);
     this.note("Чудовище можно выбрать и тапом по его рисунку в линии на планшете.");
@@ -1058,7 +1056,7 @@ class TakeArtifact extends Panel {
   build() {
     const cond = this.data.condition;
     this.note(artifactText(this.static, this.player.faction, this.data.region), "bold");
-    this.note(cond.condition === "pay" ? `Цена: ${resLong(cond.cost)}.` : "Условие выполнено, платить не нужно.");
+    this.note(cond.condition === "pay" ? `Цена: ${res(cond.cost)}.` : "Условие выполнено, платить не нужно.");
     this.button("Взять", () => this.send(true), true);
     this.button("Не брать", () => this.send(false));
   }
@@ -1081,13 +1079,13 @@ class YesNo extends Panel {
     const d = this.data;
     let text, yes, no;
     if (this.message.kind === "make_lake") {
-      const terrain = T(terrainOf(this.static, this.state, d.region));
-      text = `Потратить ${d.cost_mp} ОП из ${d.left} неистраченных, чтобы регион ${d.region} (${terrain}) `
+      const terrain = mark(terrainOf(this.static, this.state, d.region));
+      text = `Потратить ${d.cost_mp}${mark("mp")} из ${d.left} неистраченных, чтобы регион ${d.region} ${terrain} `
         + "стал озёрным — для всех игроков. Неистраченные ОП позволяют пропустить чудовищ в вашей линии.";
       [yes, no] = ["Сделать озером", "Не нужно"];
     } else {
       const unit = this.static.factions[this.player.faction].units[d.unit].name;
-      text = `Вы получаете ${R(d.resource)}: ${d.gained}. Обменять ${d.pay} из них на ${unit} ×${d.count}? `
+      text = `Вы получаете ${d.gained}${mark(d.resource)}. Обменять ${d.pay}${mark(d.resource)} из них на ${unit} ×${d.count}? `
         + "Остальное попадёт на склад.";
       [yes, no] = ["Обменять", "Оставить ресурсы"];
     }
@@ -1102,10 +1100,10 @@ class BuyMovePoints extends Panel {
 
   build() {
     const d = this.data;
-    this.note(`У вас ${d.mp}${mark("mp")}. Каждое дополнительное ОП стоит ${res(d.cost)}; можно купить до ${d.max}.`, "");
+    this.note(`У вас ${d.mp}${mark("mp")}. Каждое дополнительное +1${mark("mp")} стоит ${res(d.cost)}; можно купить до ${d.max}${mark("mp")}.`, "");
     this.counter = new Counter(d.max, () => this.refresh());
     this.summary = h("p.summary");
-    this.body.append(h("div.row", h("span", "Купить ОП:"), this.counter.el), this.summary);
+    this.body.append(h("div.row", h("span", `Купить ${mark("mp")}:`), this.counter.el), this.summary);
     this.ok = this.button("Купить", () => this.send(this.counter.value), true);
     this.button("Не покупать", () => this.send(0));
     this.refresh();
@@ -1115,7 +1113,7 @@ class BuyMovePoints extends Panel {
     if (!this.ok) return;
     const n = this.counter.value, ok = this.counter.valid;
     const cost = ok ? Object.fromEntries(Object.entries(this.data.cost).map(([k, v]) => [k, v * n])) : {};
-    this.summary.textContent = ok ? `Будет ОП: ${this.data.mp + n}, заплатите: ${resLong(cost)}` : `Введите число от 0 до ${this.data.max}`;
+    this.summary.replaceChildren(rich(ok ? `Будет ${this.data.mp + n}${mark("mp")}, заплатите: ${res(cost)}` : `Введите число от 0 до ${this.data.max}`));
     this.summary.className = "summary " + (ok ? "" : "bad");
     this.ok.disabled = !(ok && n);
   }
@@ -1131,8 +1129,8 @@ class BattleUpgrade extends Panel {
 
   build() {
     const d = this.data;
-    this.note(`Перед сражением можно заплатить ${resLong(d.cost_per_unit)} за каждую заявленную единицу, `
-      + `чтобы усилить её в этом сражении. Усиливаются те, кому это даёт больше всего: ${d.gains.map((g) => `+${g}`).join(", ")}.`, "");
+    this.note(`Перед сражением можно заплатить ${res(d.cost_per_unit)} за каждую заявленную единицу, `
+      + `чтобы усилить её в этом сражении. Усиливаются те, кому это даёт больше всего: ${d.gains.map((g) => `+${g}${mark("power")}`).join(", ")}.`, "");
     this.counter = new Counter(d.max, () => this.refresh());
     this.summary = h("p.summary");
     this.body.append(h("div.row", h("span", "Модифицировать единиц:"), this.counter.el), this.summary);
@@ -1146,8 +1144,8 @@ class BattleUpgrade extends Panel {
     const d = this.data, n = this.counter.value, ok = this.counter.valid;
     if (ok) {
       const cost = Object.fromEntries(Object.entries(d.cost_per_unit).map(([k, v]) => [k, v * n]));
-      this.summary.textContent = `Сила заявки: ${d.strength} → ${d.strength + d.gains.slice(0, n).reduce((s, g) => s + g, 0)}; `
-        + `заплатите: ${resLong(cost)}`;
+      this.summary.replaceChildren(rich(`Сила заявки: ${d.strength}${mark("power")} → ${d.strength + d.gains.slice(0, n).reduce((s, g) => s + g, 0)}${mark("power")}; `
+        + `заплатите: ${res(cost)}`));
       this.summary.className = "summary";
     } else {
       this.summary.textContent = `Введите число от 0 до ${d.max}`;
@@ -1168,12 +1166,12 @@ class RaiseForm {
     const rows = Object.entries(offer.options).map(([action, level]) => {
       this.counters[action] = new Counter(offer.max, () => this.refresh());
       this.after[action] = h("td.muted");
-      return h("tr", h("th", UI.actions[action] + (action === offer.current ? " (сейчас)" : "")), h("td.num", String(level)),
+      return h("tr", h("th", { title: UI.actions[action] }, mark(action) + (action === offer.current ? " (сейчас)" : "")), h("td.num", String(level)),
         h("td", this.counters[action].el), this.after[action]);
     });
     this.summary = h("p.summary");
     this.el = h("div.raise",
-      h("p", `Каждый уровень стоит: ${resLong({ [this.key]: this.price })}; хватает на ${offer.max} ур. `
+      h("p", `Каждый уровень стоит: ${res({ [this.key]: this.price })}; хватает на ${offer.max} ур. `
         + "Уже выполненная в этом раунде добыча сразу принесёт ещё столько ресурса, на сколько повышена."),
       h("table.form-table", h("thead", h("tr", h("th", "Действие"), h("th", "Уровень"), h("th", "Поднять на"), h("th"))), h("tbody", rows)),
       this.summary);
@@ -1201,8 +1199,8 @@ class RaiseForm {
       cell.textContent = x ? `→ уровень ${this.offer.options[action] + x}` : "";
     }
     const total = answer === null ? null : Object.values(answer).reduce((s, x) => s + x, 0);
-    this.summary.textContent = total === null ? "Введите целые числа"
-      : `Потратите ${R(this.key)}: ${total * this.price} из ${this.offer.max * this.price}`;
+    this.summary.replaceChildren(rich(total === null ? "Введите целые числа"
+      : `Потратите ${total * this.price}${mark(this.key)} из ${this.offer.max * this.price}${mark(this.key)}`));
     this.summary.className = "summary " + (total === null || total > this.offer.max ? "bad" : "");
     this.onChange();
   }
@@ -1241,7 +1239,7 @@ class AvoidBattle extends Panel {
     const grid = h("div.res-grid");
     for (const k of RESOURCES) {
       this.counters[k] = new Counter(Math.min(this.amount, this.have[k] || 0), () => this.refresh());
-      grid.append(h("div.res-cell", h("b", mark(k), ` ${R(k)} (есть ${this.have[k] || 0})`), this.counters[k].el));
+      grid.append(h("div.res-cell", h("b", mark(k), ` (есть ${this.have[k] || 0})`), this.counters[k].el));
     }
     this.summary = h("p.summary");
     this.body.append(grid, this.summary);
@@ -1285,7 +1283,7 @@ class HydraDestination extends RegionChoice {
     const opts = this.data.options, here = this.data.from;
     const options = Object.keys(opts).sort((a, b) => opts[a] - opts[b] || a.localeCompare(b));
     const steps = (n) => (!n ? "остаться" : n === 1 ? `${n} шаг` : `${n} шага`);
-    const labels = Object.fromEntries(options.map((r) => [r, [r, steps(opts[r]), T(terrainOf(this.static, this.state, r)), this.object(r)].join(" · ")]));
+    const labels = Object.fromEntries(options.map((r) => [r, [`${r} ${mark(terrainOf(this.static, this.state, r))}`, steps(opts[r]), this.object(r)].join(" · ")]));
     this.note("Гидра идёт отдельно от вас — тайно и без очков перемещения. Стоя отдельно, она обязана сразиться "
       + "с игроками в своём регионе (наград тогда нет ни у кого), а без них может штурмовать крепость "
       + "и сразиться с чудовищем вашей линии — только ради ПО.");
@@ -1308,7 +1306,7 @@ class SummonHydra extends RegionChoice {
     this.note("Выберите озёрный регион. Если гидра уже на карте, она погибает и призывается новая.");
     this.ok = this.button("Призвать", () => this.confirm(), true);
     this.ok.disabled = true;
-    this.regionList(options, labels, Object.fromEntries(options.map((r) => [r, "гидра"])));
+    this.regionList(options, labels, Object.fromEntries(options.map((r) => [r, mark("hydra")])));
   }
 
   picked() {
@@ -1324,18 +1322,18 @@ class CurseRegion extends RegionChoice {
     const d = this.data, options = d.options;
     const here = Object.fromEntries(options.map((r) => [r, this.state.players.map((pl, q) => (pl.region === r && q !== this.me ? this.name(q) : null)).filter(Boolean)]));
     if (d.optional) {
-      this.note(`Чумной столб: можно заплатить ${resLong(d.cost)}, чтобы проклясть свой текущий или соседний `
+      this.note(`Чумной столб: можно заплатить ${res(d.cost)}, чтобы проклясть свой текущий или соседний `
         + "регион. Можно отказаться.", "");
     } else {
       this.note("Прокляните любой регион (эффект артефакта).", "");
     }
     this.note("Соперник, посетивший проклятый регион или стоящий в нём сейчас, теряет самую слабую единицу; "
-      + "каждый проклятый вами регион — +1 ПО в конце игры.");
+      + `каждый проклятый вами регион — +1${mark("laurel")} в конце игры.`);
     const labels = Object.fromEntries(options.map((r) => [r, `${r}: ${this.object(r)}` + (here[r].length ? ` · там: ${here[r].join(", ")}` : "")]));
     this.ok = this.button("Проклясть", () => this.confirm(), true);
     this.ok.disabled = true;
     if (d.optional) this.button("Не проклинать", () => this.send(null));
-    this.regionList(options, labels, Object.fromEntries(options.map((r) => [r, here[r].join(", ") || "проклясть"])));
+    this.regionList(options, labels, Object.fromEntries(options.map((r) => [r, here[r].join(", ") || mark("curse")])));
   }
 
   picked() {

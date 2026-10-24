@@ -3,24 +3,18 @@
 // планшете, со стрелками зависимостей; на узком — по две в ряд, а вместо стрелок подписано, какое здание нужно.
 
 import { UI, h, mark, markup, rich } from "./rich.js";
-import { artifactCondition, color, monsterLine, nameOf, res } from "./common.js";
+import { artifactCondition, color, CONDITION_MARKS, conditionIcons, monsterLine, nameOf, res } from "./common.js";
 
 const MAX_COLUMNS = 5;
 const WIDE_COLUMN = 128;     // уже — колонки печатного планшета не помещаются: карточки по две в ряд
 const CATEGORIES = { buildings: "здания", foundations: "фундаменты", resources: "склад", battles: "сражения", artifacts: "артефакты" };
-const RESOURCE_GENITIVE = { wood: "дерева", iron: "железа", gold: "золота" };
+const CATEGORY_MARKS = { foundations: "foundation", battles: "victory", artifacts: "artifact" };   // остальные — словом
 const picture = (kind) => `assets/icons/${encodeURIComponent(kind)}_64.png`;
-
-// условие артефакта значками, как на планшете
-function conditionIcons(cond) {
-  if (cond.condition === "pay") return res(cond.cost);
-  return `${cond.count}` + mark({ foundationsBuilt: "foundation", battleWins: "victory", mountainsVisited: "mountain" }[cond.condition]);
-}
 
 // почему войско пока нельзя нанять: какое здание нужно
 function hireNeeds(faction, uid, built) {
   const names = Object.entries(faction.buildings).filter(([bid, b]) => (b.hires || []).includes(uid) && !built.includes(bid)).map(([, b]) => b.name);
-  return names.length ? `нужно здание «${names[0]}»` : "пока недоступен";
+  return names.length ? `нужно «${names[0]}»` : "пока недоступен";
 }
 
 // сила войска, как на планшете: «1»2» — во что её превращают здания, артефакты и свойства фракции
@@ -154,14 +148,14 @@ export class BoardView {
     }
     if (faction.notes) {
       const pairs = (pl.notes || []).map((n) => mark("note").repeat(n) + "○".repeat(2 - n)).join("   ");
-      out.append(h("p.bold", `Ноты гидры:  ${pairs}`));
+      out.append(h("p.bold", `${mark("hydra")} ${pairs}`));
     }
     if (faction.hydra) {
       const unit = faction.units[faction.hydra].name, where = pl.hydra;
       let text;
       if (where) {
         const apart = where !== pl.region ? "отдельно от вас" : "вместе с вами";
-        text = `${mark("hydra")} ${unit}: в регионе ${where} (${apart}), сила ${pl.units[faction.hydra].strength}${mark("power")}`;
+        text = `${mark("hydra")} ${unit}: в регионе ${where} (${apart}), ${pl.units[faction.hydra].strength}${mark("power")}`;
       } else {
         text = `${mark("hydra")} ${unit}: на карте нет`;
       }
@@ -184,18 +178,18 @@ export class BoardView {
     const rows = Object.entries(pl.units).map(([uid, u]) => {
       let status, cls = "muted";
       if ((faction.resource_units || []).includes(uid)) status = "обмен ресурсов в начале строительства";
-      else if (uid === faction.hydra) status = "призыв нотами";
+      else if (uid === faction.hydra) status = `призыв: ${mark("note").repeat(2)}`;
       else if (u.hireable) {
-        status = "наём " + res(u.hire_cost);
+        status = res(u.hire_cost);
         cls = "good";
-      } else if (Object.keys(u.hire_cost || {}).length) status = "наём " + res(u.hire_cost) + " — " + hireNeeds(faction, uid, pl.built);
+      } else if (Object.keys(u.hire_cost || {}).length) status = res(u.hire_cost) + " — " + hireNeeds(faction, uid, pl.built);
       else status = "наём недоступен";
       return h("div.unit",
         h("b.unit-name", faction.units[uid].name), h("b.unit-count" + (u.count ? "" : ".muted"), `×${u.count}`),
         h("span.unit-strength", strengthParts(u, faction.units[uid].strength).map(([text, c]) => rich(text, "span", c))),
         h("span.unit-status." + cls, status));
     });
-    return h("section", h("h3", `Войска — общая сила ${pl.army_strength}${mark("power")}`), h("div.units", rows));
+    return h("section", h("h3", `Войска — всего ${pl.army_strength}${mark("power")}`), h("div.units", rows));
   }
 
   buildings(pl, faction) {
@@ -221,7 +215,7 @@ export class BoardView {
           const needs = !wide && b.requires.length ? h("small.muted", "нужно: " + b.requires.map((r) => buildings[r].name).join(", ")) : null;
           const card = h(`div.card.building.${state}` + (selectable ? ".selectable" : "") + (selectable && bid === this.pick.selected ? ".picked" : ""),
             { onclick: selectable ? () => this.pickBuilding(bid) : null },
-            h("b", `${UI.levels[level]} · ${b.name}` + (built.has(bid) ? " ✓" : "")),
+            h("b", `${UI.levels[level]} ${b.name}` + (built.has(bid) ? " ✓" : "")),
             h("small.muted", `${b.vp}${mark("laurel")} · цена ${res(b.cost)}`),
             h("p", markup(b.text_board || b.text_ru || b.text)), needs);
           if (wide) {
@@ -320,17 +314,10 @@ export class BoardView {
 
 // --- сводка «Все игроки» ------------------------------------------------------------------------
 
-const CONDITION_SHORT = {
-  pay: (a) => "плата: " + Object.entries(a.cost).map(([k, v]) => `${v} ${RESOURCE_GENITIVE[k] || UI.resources[k] || k}`).join(", "),
-  foundationsBuilt: (a) => `${a.count} фундамента со зданиями`,
-  battleWins: (a) => `${a.count} побед в сражениях`,
-  mountainsVisited: (a) => `${a.count} горных региона`,
-};
-
 // насколько игрок выполнил условие артефакта (boardview.condition_progress)
 export function conditionProgress(static_, state, p, region) {
   const pl = state.players[p], holder = state.artifact_holder[region];
-  if (holder === p) return "✦ взят";
+  if (holder === p) return `${mark("artifact")} взят`;
   const cond = artifactCondition(static_, pl.faction, region), kind = cond.condition;
   let have, need;
   if (kind === "pay") {
@@ -345,17 +332,14 @@ export function conditionProgress(static_, state, p, region) {
       mountainsVisited: () => (pl.mountains ? pl.mountains.length : pl.visited.filter((r) => static_.regions[r].terrain === "mountain").length),
     }[kind]();
   }
-  const unit = kind !== "pay" || Object.keys(cond.cost).every((k) => ["wood", "iron", "gold"].includes(k)) ? ""
-    : " (" + Object.keys(cond.cost).map((k) => UI.resources[k] || k).join(", ") + ")";
+  const icons = kind === "pay" ? Object.keys(cond.cost).map((k) => mark(k)).join("") : mark(CONDITION_MARKS[kind]);
   let met = have >= need;
-  let text = `${have} / ${need}${unit}`;
+  let text = `${have}/${need}${icons}`;
   const wood = static_.factions[pl.faction].artifact_wood;
-  if (wood) {   // Гнездовье эльфов: «дерево 7/12 или 7/5, грифоны 3/5»
+  if (wood) {   // Гнездовье эльфов: «7/12(дерево) или 7/5(дерево), грифоны 3/5»
     const price = wood.prices[region], stock = pl.resources.wood, griffins = pl.units[wood.unit].count;
     const unitName = static_.factions[pl.faction].units[wood.unit].name.toLowerCase();
-    const same = kind === "pay" && Object.keys(cond.cost).length === 1 && "wood" in cond.cost;
-    if (kind === "pay") text = `${UI.resources[Object.keys(cond.cost)[0]]} ${have}/${need}`;
-    text += ` или ${same ? "" : "дерево "}${stock}/${price}, ${unitName}ы ${griffins}/${price}`;
+    text += ` или ${stock}/${price}${mark("wood")}, ${unitName}ы ${griffins}/${price}`;
     const builtNest = pl.built.includes(wood.building);
     if (!builtNest) text += " (нет Гнездовья)";
     met = met || (builtNest && stock >= price && griffins >= price);
@@ -393,16 +377,16 @@ export function playersSummary(static_, state, you, onOpen) {
         return [pl.region || "—", ...["wood", "iron", "gold"].map((k) => String(pl.resources[k])), units || "нет", String(pl.army_strength),
           ...(special ? [specialsCell(static_, state, p)] : [])];
       }),
-    table("Победные очки", [...Object.values(CATEGORIES).map((t) => h("th", t[0].toUpperCase() + t.slice(1))), h("th", mark("laurel"))],
+    table("Победные очки", [...Object.entries(CATEGORIES).map(([k, t]) => h("th", { title: t }, k in CATEGORY_MARKS ? mark(CATEGORY_MARKS[k]) : t[0].toUpperCase() + t.slice(1))), h("th", mark("laurel"))],
       (pl) => [...Object.keys(CATEGORIES).map((k) => String(pl.score[k])), h("b", String(pl.score.total))]),
     table("Здания по уровням", [1, 2, 3, 4].map((lvl) => h("th", UI.levels[lvl])), (pl) => {
       const faction = static_.factions[pl.faction];
       return [1, 2, 3, 4].map((lvl) => pl.built.filter((b) => faction.buildings[b].level === lvl).map((b) => faction.buildings[b].name).join(", ") || "—");
     }),
-    table("Крепости и артефакты", [h("th", mark("victory"), " Победы"), h("th", "Захваченные крепости"), h("th", "Артефакты")],
+    table("Крепости и артефакты", [h("th", { title: "Победы в сражениях" }, mark("victory")), h("th", "Захваченные крепости"), h("th", "Артефакты")],
       (pl) => [String(pl.victories), pl.fortresses.join(", ") || "—",
         pl.artifacts.length ? h("span.art-list", pl.artifacts.map((r) => h("span", h("img.ic.art", { src: picture(`artifact_${r}`), alt: "" }), r))) : "—"]),
     table("Условия артефактов", artifacts.map(([r, a]) => h("th.art-head", h("img.ic.art", { src: picture(`artifact_${r}`), alt: "" }),
-      h("div", r), h("small", CONDITION_SHORT[a.condition](a)))), (pl, p) => artifacts.map(([r]) => conditionProgress(static_, state, p, r))),
+      h("div", r), h("small", conditionIcons(a)))), (pl, p) => artifacts.map(([r]) => conditionProgress(static_, state, p, r))),
     h("p.muted.small", "Тап по строке — планшет и карта игрока."));
 }
