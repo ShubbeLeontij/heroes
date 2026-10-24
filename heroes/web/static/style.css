@@ -476,12 +476,17 @@ table.army-table td.num, table.form-table td.num { text-align: center; }
 .arrows svg { position: absolute; left: 0; top: 0; overflow: visible; }
 .pick-hint { color: var(--accent); font-weight: bold; font-size: 0.85rem; }
 
-.artifacts { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-.artifact { display: flex; flex-direction: column; align-items: center; text-align: center; }
+/* артефакты — одной строкой, как линия чудовищ: узкие карточки, текст переносится */
+/* колонка не уже самого длинного слова (слова не рвутся); не помещается — строка прокручивается, как чудовища */
+.artifacts { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(min-content, 1fr); gap: 4px; overflow-x: auto; padding-bottom: 4px; }
+.artifact { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 3px; text-align: center; font-size: 0.7rem;
+  min-width: 64px; }
+.artifact .cond { font-size: 0.85rem; }
+.artifact p { margin: 0; line-height: 1.2; }
 .artifact.held { border: 2px solid var(--holder); }
-.artifact .status { margin-top: auto; padding-top: 4px; }
+.artifact .status { margin-top: auto; padding-top: 2px; font-size: 0.7rem; }
 .artifact.held .status { color: var(--holder); }
-.artifact-picture { height: 48px; width: auto; margin: 4px 0; }
+.artifact-picture { height: 36px; width: auto; max-width: 100%; object-fit: contain; }
 
 .monsters { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(64px, 1fr); gap: 4px; overflow-x: auto; padding-bottom: 4px; }
 .monster { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; font-size: 0.85rem; }

@@ -274,8 +274,8 @@ export class BoardView {
     const cards = Object.keys(faction.artifacts).map((region) => {
       const holder = state.artifact_holder[region];
       let status;
-      if (holder !== undefined) status = holder === this.you ? "ваш" : `у игрока ${nameOf(static_, holder, true)}`;
-      else if (region in state.reserved) status = `бронь: ${nameOf(static_, state.reserved[region], true)}`;
+      if (holder !== undefined) status = holder === this.you ? "ваш" : who(static_, holder);   // узкая карточка: аватарка и имя
+      else if (region in state.reserved) status = `бронь: ${who(static_, state.reserved[region])}`;
       else status = "свободен";
       const card = h("div.card.artifact" + (holder !== undefined ? ".held" : ""), tipAttr("artifact", region),
         h("b.cond", artifactCost(static_, pl.faction, region)),
