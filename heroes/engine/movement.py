@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import heapq
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from . import combat
 from .decisions import Decision, check_choice
 from .economy import fmt_res, gain, pay, stock
 from .effects import effects_of, hydra_unit, source_name, step_cost
-from .special import curse_penalty, raise_actions
+from .special import apply_raise, check_raise, curse_penalty, raise_actions, raise_offer, raise_text
 from .state import OBJECT_NAMES, RESOURCE_NAMES, TERRAIN_NAMES
 
 if TYPE_CHECKING:
@@ -92,6 +92,69 @@ def move_points(game: Game, p: int, level: int) -> int:
     return mp
 
 
+LEGACY_KINDS = ("raise_action", "buy_move_points")   # так спрашивали до тайного выбора вместе с регионом
+
+
+def base_move_points(game: Game, p: int, level: int) -> int:
+    """ОП без решений игрока: уровень действия и Обсерватория (Дом вождей и Катафалк добавляются тайно)."""
+    return level + sum(e["value"] for e in effects_of(game, p, "extra_move_points"))
+
+
+def buy_offer(game: Game, p: int) -> dict | None:
+    """Катафалк: сколько ОП можно купить; None — покупать нечем или негде."""
+    for e in effects_of(game, p, "buy_move_points"):
+        key, price = next(iter(e["cost"].items()))
+        most = stock(game, p, key) // price
+        if most > 0:
+            return {"cost": e["cost"], "max": most}
+    return None
+
+
+def reach_by_extra(game: Game, p: int, base: int, extra: int) -> dict[int, dict[str, int]]:
+    """Куда можно попасть при каждой прибавке 0..extra ОП к base."""
+    return {x: reachable(game, p, base + x) for x in range(extra + 1)}
+
+
+def check_move(answer: Any, reach: dict[int, dict[str, int]], raise_: dict | None, buy: dict | None) -> str | None:
+    """Ответ о перемещении с покупкой ОП: {"destination", "raise", "buy"}; регион должен быть достижим с итоговыми ОП."""
+    if not isinstance(answer, dict) or "destination" not in answer or set(answer) - {"destination", "raise", "buy"}:
+        return 'Expected an object {"destination": region, "raise": {...}, "buy": n}'
+    levels, bought = answer.get("raise") or {}, answer.get("buy", 0)
+    if raise_ is None and levels:
+        return "You cannot raise actions now"
+    if raise_ is not None:
+        error = check_raise(levels, raise_["options"], raise_["max"])
+        if error:
+            return error
+    if not isinstance(bought, int) or isinstance(bought, bool) or not 0 <= bought <= (buy["max"] if buy else 0):
+        return f"MP to buy: an integer from 0 to {buy['max'] if buy else 0}"
+    extra = levels.get("move", 0) + bought
+    error = check_choice(answer["destination"], list(reach[extra]))
+    return error and f"With {extra} extra MP: {error}"
+
+
+def move_text(game: Game, p: int, base: int, reach: dict[int, dict[str, int]], raise_: dict | None, buy: dict | None) -> str:
+    """Перемещение вместе с повышением Дома вождей и покупкой ОП: всё тайно и сразу."""
+    text = destination_text(game, p, base, reach[0])
+    parts = []
+    if raise_:
+        parts.append(raise_text(game, p, raise_))
+    if buy:
+        key, price = next(iter(buy["cost"].items()))
+        parts.append(f"{source_name(game, p, 'buy_move_points')}: you may buy extra MP for {price} {RESOURCE_NAMES[key]} each "
+                     f"(up to {buy['max']}).")
+    text += ("\nBefore choosing the region you may increase your MP, and this is secret too. " + " ".join(parts)
+             + "\nAnswer {\"destination\": region, \"raise\": {action: levels}, \"buy\": n}; the region must be reachable with "
+             "the MP you end up with. Regions that extra MP make reachable (x — extra MP):")
+    seen = set(reach[0])
+    for x in range(1, len(reach)):
+        new = {r: c for r, c in reach[x].items() if r not in seen}
+        seen |= set(new)
+        if new:
+            text += f"\n  +{x}: " + ", ".join(f"{r} (cost {c})" for r, c in sorted(new.items(), key=lambda kv: (kv[1], kv[0])))
+    return text
+
+
 def hydra_reach(game: Game, p: int) -> dict[str, int]:
     """Куда может пойти гидра наги: на 1 регион (с Маяком — на 2) любой местности, через порталы, без ОП."""
     start = game.state.players[p].hydra
@@ -105,15 +168,54 @@ def hydra_reach(game: Game, p: int) -> dict[str, int]:
     return dist
 
 
+def combined_destination(game: Game, p: int, base: int, reach: dict[int, dict[str, int]],
+                         raise_: dict | None, buy: dict | None) -> Decision:
+    """Тайное решение игрока с Домом вождей или Катафалком: повышение, покупка ОП и регион — одним ответом."""
+    here = game.state.players[p].region
+    return Decision(
+        "destination", p, move_text(game, p, base, reach, raise_, buy),
+        {"mp": base, "options": {r: {"cost": c, "left": base - c} for r, c in reach[0].items()}, "raise": raise_, "buy": buy,
+         "extra": {str(x): {r: {"cost": c, "left": base + x - c} for r, c in rs.items()} for x, rs in reach.items() if x}},
+        lambda a: check_move(a, reach, raise_, buy),
+        {"destination": here, "raise": {}, "buy": 0},
+    )
+
+
+def pay_for_mp(game: Game, p: int, answer: dict) -> int:
+    """Заплатить за повышение перемещения и купленные ОП; возвращает прибавку к ОП."""
+    extra = 0
+    if answer.get("raise"):
+        extra += apply_raise(game, p, "move", answer["raise"])
+    n = answer.get("buy", 0)
+    if n:
+        key, price = next(iter(next(iter(effects_of(game, p, "buy_move_points")))["cost"].items()))
+        source = source_name(game, p, "buy_move_points")
+        pay(game, p, {key: price * n})
+        game.log(f"{game.state.players[p].name} buys {n} MP for {fmt_res({key: price * n})} ({source})")
+        extra += n
+    return extra
+
+
 def move_action(game: Game, level: int) -> None:
     st = game.state
     order = st.turn_order()
-    mp = {}
+    # Сохранения старого формата: Дом вождей и Катафалк спрашивали по очереди, открыто, до выбора региона
+    legacy = game.replaying and game.replay_queue[0]["kind"] in LEGACY_KINDS
+    mp, offers, base_mp = {}, {}, {}
     for p in order:
-        mp[p] = move_points(game, p, level)
-        st.players[p].move_points = mp[p]
-    options = {p: reachable(game, p, mp[p]) for p in order}
+        if legacy:
+            mp[p] = move_points(game, p, level)
+        else:
+            mp[p] = base_move_points(game, p, level)
+            raise_, buy = raise_offer(game, p, "move"), buy_offer(game, p)
+            if raise_ or buy:
+                offers[p] = (raise_, buy)
+        st.players[p].move_points = base_mp[p] = mp[p]
+    # куда можно попасть: у игрока с повышением или покупкой — при каждой прибавке ОП (тайно), у прочих — одно
+    reach = {p: reach_by_extra(game, p, mp[p], sum(o["max"] for o in offers.get(p, ()) if o)) for p in order}
+    options = {p: reach[p][0] for p in order}
     decisions = [
+        combined_destination(game, p, mp[p], reach[p], *offers[p]) if p in offers else
         Decision(
             "destination", p, destination_text(game, p, mp[p], options[p]),
             {"mp": mp[p], "options": {r: {"cost": c, "left": mp[p] - c} for r, c in options[p].items()}},
@@ -144,8 +246,14 @@ def move_action(game: Game, level: int) -> None:
         game.reach = {}
     leftover = {}
     moved = []
-    # Сначала все узнают, кто куда пошёл, и только потом — ресурсы, проклятия и сражения.
-    for p, dest in zip(order, answers):
+    # Сначала все узнают, кто что выбрал (повышение, покупка ОП, регион), и только потом — ресурсы, проклятия и сражения.
+    for p, answer in zip(order, answers):
+        dest = answer
+        if p in offers:
+            dest = answer["destination"]
+            mp[p] += pay_for_mp(game, p, answer)
+            st.players[p].move_points = mp[p]
+            options[p] = reach[p][mp[p] - base_mp[p]]
         leftover[p] = mp[p] - options[p][dest]
         player = st.players[p]
         if dest == player.region:

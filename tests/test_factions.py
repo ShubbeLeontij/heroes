@@ -265,8 +265,8 @@ def test_barrow_resurrects_skeletons():
 
 
 def test_executioner_strength_is_round_mp_and_altar_allows_any_monster():
-    undead = Scripted(destination=lambda d: next(r for r, o in d["options"].items() if o["cost"] == 0),
-                      buy_move_points=1,
+    undead = Scripted(destination=lambda d: {"destination": next(r for r, o in d["options"].items() if o["cost"] == 0),
+                                             "raise": {}, "buy": 1},
                       fight_monster=lambda d: {"monster": 3,
                                                "army": {"executioner": 3}})
     game = make(["undead", "humans"], [undead, Scripted()])
@@ -372,6 +372,64 @@ def test_chiefs_house_raises_current_and_past_actions():
     from heroes.engine.special import raise_actions
     assert raise_actions(game, 0, "build") == 2
     assert player.resources["wood"] == 1 and player.tokens["rage"] == 0
+
+
+def far_region(game, p, mp):
+    """Регион, до которого игроку p не хватает ровно 1–2 ОП из mp."""
+    from heroes.engine.movement import reachable
+    near = reachable(game, p, mp)
+    return next(r for r, c in reachable(game, p, mp + 2).items() if r not in near)
+
+
+def test_chiefs_house_raise_and_destination_are_one_secret_answer():
+    """Дом вождей: повышение перемещения и регион выбираются вместе; регион должен быть достижим с итоговыми ОП."""
+    def answer(game, d):
+        far = far_region(game, 0, d["mp"])
+        extra = next(x for x in (1, 2) if far in d["extra"][str(x)])
+        return {"destination": far, "raise": {"move": extra}, "buy": 0}
+    orc = Scripted()
+    game = make(["orcs", "humans"], [orc, Scripted()])
+    orc.answers["destination"] = lambda d: answer(game, d)
+    st = game.state
+    st.action_order, st.phase = ["wood", "iron", "move", "build"], 3
+    player = st.players[0]
+    player.built.append("chiefs_house")
+    player.tokens["rage"] = 4
+    movement.move_action(game, 3)
+    assert "raise_action" not in orc.asked and orc.asked.count("destination") == 1
+    assert player.region == far_region(make(["orcs", "humans"]), 0, 3) and player.tokens["rage"] < 4
+    assert player.move_points > 3
+
+
+def test_move_answer_must_be_reachable_with_the_chosen_extra_mp():
+    game = make(["undead", "humans"])
+    player = game.state.players[0]
+    player.built.append("hearse")
+    player.resources["wood"] = 3
+    from heroes.engine.movement import base_move_points, buy_offer, check_move, reach_by_extra
+    buy = buy_offer(game, 0)
+    reach = reach_by_extra(game, 0, base_move_points(game, 0, 1), buy["max"])
+    far = far_region(game, 0, 1)
+    need = next(x for x in range(buy["max"] + 1) if far in reach[x])
+    assert check_move({"destination": far, "buy": need}, reach, None, buy) is None
+    if need:
+        assert check_move({"destination": far, "buy": need - 1}, reach, None, buy)
+    assert check_move({"destination": far, "buy": buy["max"] + 1}, reach, None, buy)
+    assert check_move({"destination": far, "raise": {"move": 1}}, reach, None, buy)
+    assert check_move(far, reach, None, buy)
+
+
+def test_old_saves_with_separate_raise_and_buy_questions_still_replay():
+    """Раньше Дом вождей и Катафалк спрашивали отдельно и открыто до региона: такие сохранения загружаются."""
+    game = make(["undead", "humans"], [Scripted(), Scripted()])
+    player = game.state.players[0]
+    player.built.append("hearse")
+    player.resources["wood"] = 4
+    here = player.region
+    game.replay_queue.extend([{"round": 1, "player": 0, "kind": "buy_move_points", "answer": 2},
+                              {"round": 1, "player": 0, "kind": "destination", "answer": here}])
+    movement.move_action(game, 1)
+    assert player.move_points == 3 and player.resources["wood"] == 0
 
 
 # --- Эльфы ------------------------------------------------------------------------------------

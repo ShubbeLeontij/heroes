@@ -82,7 +82,13 @@ class RandomBot(Player):
         return self.rng.choice(sorted(data["options"])) if self.rng.random() < 0.3 else None
 
     def _destination(self, data):
-        return self.rng.choice(sorted(data["options"]))
+        if "extra" not in data:
+            return self.rng.choice(sorted(data["options"]))
+        raise_ = self._raise_action(data["raise"]) if data["raise"] and self.rng.random() < 0.5 else {}
+        buy = self.rng.randint(0, data["buy"]["max"]) if data["buy"] and self.rng.random() < 0.5 else 0
+        extra = raise_.get("move", 0) + buy
+        reach = data["options"] if not extra else data["extra"][str(extra)]
+        return {"destination": self.rng.choice(sorted(reach)), "raise": raise_, "buy": buy}
 
     def _region_stance(self, data):
         return self.rng.choice(data["options"])
