@@ -80,6 +80,10 @@ class App {
   }
 
   profilesScreen() {
+    if (!this.static) {   // ожидающий выбора места запрос к хозяину не нужен, пока смотрим профили
+      this.link.ended = true;
+      this.link.ws?.close();
+    }
     document.body.dataset.screen = "profiles";
     this.profiles.open();
   }
@@ -89,6 +93,7 @@ class App {
   // auto — сразу подключиться, если страницу перезагрузили посреди партии или открыли ссылкой с именем
   joinScreen(error = null, auto = true) {
     document.body.dataset.screen = "join";
+    this.asked = false;   // join() уже вызывали (кнопкой, пока ждали ответ о пароле)?
     $("join-host").textContent = location.host;
     const name = $("join-name"), password = $("join-password");
     // ссылка вида ?name=Боря&password=… (её печатает хозяин) — сразу за это место
@@ -110,16 +115,37 @@ class App {
       store.set("heroes.avatar", null);
       this.showAvatar();
     };
+    this.gate(error, auto);
+  }
+
+  // без пароля партии поле пароля и кнопка не нужны: сразу просим у хозяина свободные места
+  async gate(error, auto) {
+    if (this.locked === undefined) {
+      try { this.locked = (await (await fetch("access", { cache: "no-store" })).json()).password; } catch { this.locked = true; }
+    }
+    if (this.asked) return;
+    const open = !this.locked;
+    $("join-password").parentElement.classList.toggle("hidden", open);
+    $("join-submit").classList.toggle("hidden", open && !error);
+    if (open && !error && !session.get("heroes.watching") && !session.get("heroes.playing")) {
+      this.join();
+      return;
+    }
     // страницу перезагрузили посреди партии — сразу подключаемся снова
+    const params = new URLSearchParams(location.search), name = $("join-name");
     if (!auto || error) return;
     if (session.get("heroes.watching")) this.join(true);
-    else if ((session.get("heroes.playing") || params.has("name")) && name.value) this.join();
+    else if (session.get("heroes.playing") && session.get("heroes.seat")) {
+      name.value = session.get("heroes.seat");
+      this.join();
+    } else if (params.has("name") && name.value) this.join();
   }
 
   // watch — смотреть партию, не занимая места
   join(watch = false) {
+    this.asked = true;
     const name = $("join-name").value.trim(), password = $("join-password").value;
-    if (!watch) store.set("heroes.name", name || null);
+    if (!watch) store.set("heroes.name", null);   // имя из профиля работает один раз; дальше хозяин предлагает места
     store.set("heroes.password", password || null);
     $("join-error").classList.add("hidden");
     $("join-submit").disabled = true;
@@ -167,6 +193,7 @@ class App {
           this.waiting(null, "Вы смотрите партию. Ждём, пока все сядут за стол…");
         } else {
           session.set("heroes.playing", "1");
+          session.set("heroes.seat", m.name);
           this.setStatus(`Вы за столом: ${m.name}`);
           document.title = `«Герои» — ${m.name}`;
           this.waiting(null, `Вы подключены как ${m.name}. Ждём начала партии…`);
@@ -213,7 +240,6 @@ class App {
       type: "button",
       onclick: () => {
         $("join-name").value = seat;
-        store.set("heroes.name", seat);
         $("join-seats").replaceChildren();
         $("join-status").textContent = "Подключение…";
         this.link.chooseSeat(seat);

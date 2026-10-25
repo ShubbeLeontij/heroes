@@ -240,6 +240,42 @@ def test_spectator_watches_in_browser(browser):
         server.close()
 
 
+def test_join_offers_seats_without_name(browser):
+    """Подключение без имени: поля имени нет, хозяин сразу предлагает свободные места."""
+    network = cli.Network(0, "secret", log_fn=lambda text: None)
+    network.seat("Аня")
+    network.seat("Боря")
+    network.server.start()
+    try:
+        browser.errors.clear()
+        browser.open(f"http://127.0.0.1:{network.server.port}/")
+        browser.wait_for("window.app !== undefined")
+        assert browser.evaluate("document.getElementById('join-name').type") == "hidden"
+        browser.evaluate("document.getElementById('join-password').value = 'secret'; document.getElementById('join-submit').click(); 1")
+        assert browser.wait_for("[...document.querySelectorAll('#join-seats .seat')].map((b) => b.textContent).join()") == "Аня,Боря"
+        assert not browser.errors, browser.errors
+    finally:
+        network.server.close()
+
+
+def test_join_open_session_lists_seats_at_once(browser):
+    """Партия без пароля: ни поля пароля, ни кнопки; свободные места сразу, даже если оно одно."""
+    network = cli.Network(0, None, log_fn=lambda text: None)
+    network.seat("Аня")
+    network.server.start()
+    try:
+        browser.errors.clear()
+        browser.open(f"http://127.0.0.1:{network.server.port}/")
+        browser.wait_for("window.app !== undefined")
+        assert browser.wait_for("[...document.querySelectorAll('#join-seats .seat')].map((b) => b.textContent).join()") == "Аня"
+        assert browser.evaluate("document.getElementById('join-password').offsetParent === null")
+        assert browser.evaluate("document.getElementById('join-submit').offsetParent === null")
+        assert browser.evaluate("document.body.dataset.screen") == "join"
+        assert not browser.errors, browser.errors
+    finally:
+        network.server.close()
+
+
 def test_profiles_screen(browser, tmp_path, monkeypatch):
     """«Профили и статистика»: список с партиями, переименование, «Играть под этим профилем», удаление."""
     monkeypatch.chdir(tmp_path)

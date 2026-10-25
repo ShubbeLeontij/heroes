@@ -188,13 +188,10 @@ class Server:
                     conn.send({"t": "error", "text": "All network seats are taken."})
                     raise ValueError("no seats")
                 name = hello.get("name")
-                if name not in free:
-                    if len(free) == 1 and not name:
-                        name = free[0]
-                    else:
-                        conn.send({"t": "choose", "seats": free})
-                        hello = conn.recv()
-                        continue
+                if name not in free:   # и единственное место не занимаем само: гость мог прийти поправить профиль
+                    conn.send({"t": "choose", "seats": free})
+                    hello = conn.recv()
+                    continue
                 break
         except (OSError, ValueError):
             conn.close()
