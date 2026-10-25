@@ -116,14 +116,14 @@ class SchemaProbe(RandomBot):
         for _ in range(5):
             answer = spec.convert(random_instance(spec.schema, self.rng))
             assert decision.validate(answer) is None or isinstance(decision.validate(answer), str)
-        self.kinds.add(decision.kind)
+        self.kinds.add(decision.kind + ("+extra" if "extra" in decision.data else ""))   # перемещение с Домом вождей/Катафалком
         return super().decide(decision, view)
 
 
 def test_schemas_cover_every_faction_decision():
     factions = ["humans", "undead", "dwarves", "orcs", "elves", "nagas"]
-    wanted = {"raise_action", "circle_note", "summon_hydra", "hydra_destination", "curse_region",
-              "buy_move_points", "battle_upgrade", "make_lake", "exchange_on_gain"}
+    wanted = {"destination+extra", "circle_note", "summon_hydra", "hydra_destination", "curse_region",
+              "battle_upgrade", "make_lake", "exchange_on_gain"}
     kinds = set()
     for seed in range(40):
         game = Game([SchemaProbe(seed * 3 + i, kinds) for i in range(3)], factions=random.Random(seed).sample(factions, 3))

@@ -21,8 +21,8 @@ from browser import Browser
 
 GAME_SECONDS = 120   # партия против ботов в браузере идёт секунды; дольше — страница зависла
 FACTIONS = ["humans", "undead", "dwarves", "orcs", "elves", "nagas"]
-SPECIAL = {"undead": {"curse_region", "buy_move_points", "exchange_on_gain"}, "dwarves": {"step:science"},
-           "orcs": {"step:upgrade", "step:raise", "raise_action"}, "elves": {"upgrade"},
+SPECIAL = {"undead": {"curse_region", "destination:extra", "exchange_on_gain"}, "dwarves": {"step:science"},
+           "orcs": {"step:upgrade", "step:raise", "destination:extra"}, "elves": {"upgrade"},
            "nagas": {"circle_note", "summon_hydra", "hydra_destination", "make_lake"}}
 
 

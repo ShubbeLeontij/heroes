@@ -342,7 +342,8 @@ class RegionChoice extends Panel {
     this.options = options;
     this.choice = null;
     this.items = new Map();
-    const list = h("div.region-list", { role: "listbox" });
+    this.listEl?.remove();   // список перестраивается, когда меняются доступные регионы
+    const list = this.listEl = h("div.region-list", { role: "listbox" });
     for (const r of options) {
       const item = h("button.region", { type: "button", role: "option", onclick: () => this.pick(r, true),
         ondblclick: () => this.confirm() }, labels[r]);
@@ -790,7 +791,41 @@ class Destination extends RegionChoice {
   }
 
   build() {
-    const opts = this.data.options, here = this.player.region;
+    const d = this.data, here = this.player.region;
+    this.note("Куда пошли остальные, станет известно, когда выберут все. Неистраченные очки перемещения "
+      + "позволяют в этом раунде пропустить чудовищ в вашей линии.");
+    if (d.raise || d.buy) this.note("Дом вождей и Катафалк тоже действуют тайно: повышение и покупку ОП узнают, когда выберут все. "
+      + "Список регионов зависит от того, сколько ОП вы получите.", "");
+    if (d.raise) {
+      this.form = new RaiseForm(d.raise, () => this.changed());
+      this.body.append(this.form.el);
+    }
+    if (d.buy) {
+      this.counter = new Counter(d.buy.max, () => this.changed());
+      this.body.append(h("div.row", h("span", `Купить ${mark("mp")} за ${res(d.buy.cost)} каждое (до ${d.buy.max}):`), this.counter.el));
+    }
+    this.ok = this.button("Остаться", () => this.confirm(), true);
+    this.changed(here);
+  }
+
+  // прибавка к ОП от повышения и покупки; null — введено неверно
+  extra() {
+    const d = this.data;
+    if ((this.form && !this.form.valid()) || (this.counter && !this.counter.valid)) return null;
+    return ((this.form?.answer() || {}).move || 0) + (this.counter ? this.counter.value : 0);
+  }
+
+  // что-то в повышении или покупке изменилось: перестроить список регионов под новые ОП
+  changed(selected = null) {
+    if (!this.ok) return;   // форма повышения сообщает об изменении ещё при создании
+    const d = this.data, extra = this.extra(), keep = selected || this.choice;
+    this.usable = extra !== null;
+    if (extra === null) {
+      this.ok.disabled = true;
+      return;
+    }
+    const opts = extra === 0 ? d.options : d.extra[String(extra)];
+    const here = this.player.region;
     const options = Object.keys(opts).sort((a, b) => opts[a].cost - opts[b].cost || a.localeCompare(b));
     const others = {};
     this.state.players.forEach((pl, q) => {
@@ -807,14 +842,20 @@ class Destination extends RegionChoice {
       labels[r] = parts.join(" · ");
       badges[r] = r === here ? "остаться" : `${info.cost}${mark("mp")}`;
     }
-    this.note("Куда пошли остальные, станет известно, когда выберут все. Неистраченные очки перемещения "
-      + "позволяют в этом раунде пропустить чудовищ в вашей линии.");
-    this.ok = this.button("Остаться", () => this.confirm(), true);
-    this.regionList(options, labels, badges, here);
+    this.regionList(options, labels, badges, options.includes(keep) ? keep : here);
+    this.usable = true;
   }
 
   picked() {
+    this.ok.disabled = false;
     this.ok.textContent = this.choice === this.player.region ? "Остаться" : `Идти: ${this.choice}`;
+  }
+
+  confirm() {
+    if (this.choice === null || !this.usable) return;
+    const d = this.data;
+    if (!d.raise && !d.buy) return this.send(this.choice);
+    this.send({ destination: this.choice, raise: this.form ? this.form.answer() : {}, buy: this.counter ? this.counter.value : 0 });
   }
 }
 
@@ -1179,6 +1220,12 @@ class RaiseForm {
   answer() {
     if (!Object.values(this.counters).every((c) => c.valid)) return null;
     return Object.fromEntries(Object.entries(this.counters).filter(([, c]) => c.value).map(([a, c]) => [a, c.value]));
+  }
+
+  // можно ли отвечать с тем, что введено (в том числе ничего не повышать)
+  valid() {
+    const answer = this.answer();
+    return answer !== null && Object.values(answer).reduce((s, x) => s + x, 0) <= this.offer.max;
   }
 
   ok() {

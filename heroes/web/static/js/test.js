@@ -74,6 +74,7 @@ export function installTester(app, seed) {
     if (app.pending !== m || !app.panel) return;
     const panel = app.panel;
     kinds.add(m.kind);
+    if (m.kind === "destination" && m.data.extra) kinds.add("destination:extra");   // с Домом вождей или Катафалком
     log.kinds = [...kinds];
     for (let attempt = 0; attempt < 40; attempt++) {
       fiddle(panel);

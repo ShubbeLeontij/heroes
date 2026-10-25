@@ -63,6 +63,8 @@ def spec_for(game: Game, d: Decision) -> Spec:
     if kind in ("choose_start", "region_stance"):
         return Spec(enum(data["options"]), "answer — one of the options: " + ", ".join(data["options"]))
     if kind == "destination":
+        if "extra" in data:   # с Домом вождей или Катафалком: повышение, покупка ОП и регион — одним ответом
+            return move_spec(data)
         return Spec(enum(data["options"]), "answer — the destination region name (your current region means staying put)")
     if kind == "action_order":
         return Spec({"type": "array", "items": enum(ACTIONS), "minItems": 4, "maxItems": 4},
@@ -95,6 +97,24 @@ def spec_for(game: Game, d: Decision) -> Spec:
     if kind == "choose_reward":
         return reward_spec(data["options"])
     return faction_spec(kind, data)
+
+
+def move_spec(data: dict) -> Spec:
+    """Перемещение с повышением Дома вождей и покупкой ОП Катафалка: регион должен быть достижим с итоговыми ОП."""
+    regions = sorted({*data["options"], *(r for reach in data["extra"].values() for r in reach)})
+    properties: dict = {"destination": enum(regions)}
+    hints = ["answer.destination — the destination region (your current region means staying put); it must be "
+             "reachable with the MP you end up with"]
+    if data["raise"]:
+        properties["raise"] = counts(data["raise"]["options"])
+        hints.append(f"answer.raise — levels to add to each action (0 — none), at most {data['raise']['max']} in total; "
+                     "levels added to \"move\" give extra MP")
+    if data["buy"]:
+        properties["buy"] = {"type": "integer", "minimum": 0, "maximum": data["buy"]["max"]}
+        hints.append(f"answer.buy — MP to buy, from 0 to {data['buy']['max']}")
+    return Spec(obj(properties), "; ".join(hints),
+                lambda a: {"destination": a["destination"], "raise": {k: v for k, v in a.get("raise", {}).items() if v},
+                           "buy": a.get("buy", 0)})
 
 
 def faction_spec(kind: str, data: dict) -> Spec:
