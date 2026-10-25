@@ -62,7 +62,9 @@ export class MapView {
     this.container = container;
     this.static = null;
     this.state = null;
-    this.you = null;        // чья это карта: его маршрут, фундаменты, флажки
+    this.you = null;        // чья это карта: его маршрут, фундаменты, флажки (на время наведения на аватарку — её игрока)
+    this.own = null;        // чья карта открыта на самом деле
+    this.glance = null;     // игрок, на чью аватарку навели
     this.viewer = null;     // кто смотрит
     this.options = null;    // режим выбора: регион → подпись
     this.owner = null;      // чей это выбор: тыкать можно только на его карте
@@ -149,7 +151,7 @@ export class MapView {
       this.spots = new Map();
     }
     this.fresh = [];
-    Object.assign(this, { static: static_, state, you, viewer });
+    Object.assign(this, { static: static_, state, own: you, you: this.glance ?? you, viewer });
     this.redraw();
   }
 
@@ -171,6 +173,11 @@ export class MapView {
 
   picking() {
     return this.options !== null && this.you === this.owner;
+  }
+
+  // можно ли выбрать регион кликом: выбор идёт на своей карте, даже пока навели на чужую аватарку
+  selecting() {
+    return this.options !== null && this.own === this.owner;
   }
 
   // что обвести (mapview._shown)
@@ -338,7 +345,7 @@ export class MapView {
 
   tap(at) {
     const region = this.regionAt(at);
-    if (region && this.picking() && region in this.options && this.onSelect) {
+    if (region && this.selecting() && region in this.options && this.onSelect) {
       this.selected = region;
       this.onSelect(region);
       this.redraw();
@@ -394,16 +401,19 @@ export class MapView {
 
   setHover(region, token) {
     if (token !== this.tokenHover) {
-      const before = this.routeOwner(this.tokenHover);
+      const before = this.you;
       this.tokenHover = token;
       for (const el of this.html.querySelectorAll(".token[data-key]")) {
         el.classList.toggle("faded", el.dataset.key === token);
       }
-      if (this.routeOwner(token) !== before) this.redraw();   // путь того, на чью аватарку навели
+      // навели на аватарку — карта выглядит так, как её видит этот игрок (досягаемость, фундаменты, путь)
+      this.glance = token ? Number(token.split(":")[1]) : null;
+      this.you = this.glance ?? this.own;
+      if (this.you !== before) this.redraw();
     }
     if (region === this.hover) return;
     this.hover = region;
-    this.container.style.cursor = region && this.picking() && region in this.options ? "pointer" : "";
+    this.container.style.cursor = region && this.selecting() && region in this.options ? "pointer" : "";
     this.drawHover();
   }
 
