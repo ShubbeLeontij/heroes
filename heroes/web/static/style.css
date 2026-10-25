@@ -395,7 +395,7 @@ label.radio input { width: 20px; height: 20px; min-height: 0; margin: 2px 0 0; f
 button.helper { min-height: 34px; padding: 0 10px; font-size: 0.85rem; }
 .small-buttons { margin-top: 4px; }
 
-.region-list { display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.region-list { display: flex; flex-direction: column; gap: 4px; }   /* прокручивается вся панель решения: второй скролл внутри списка не нужен */
 .region-list button.region { text-align: left; min-height: var(--tap); padding: 8px 10px; line-height: 1.3; height: auto; }
 .region-list button.region.selected { background: #e8590c; border-color: #e8590c; color: white; font-weight: bold; }
 
