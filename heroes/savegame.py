@@ -4,7 +4,7 @@
 и журналу решений: при загрузке движок заново проигрывает все записанные ответы.
 Так можно сохраниться в любой момент — даже посреди раунда, в ожидании решения.
 
-Имена файлов — дата и время сохранения и номер раунда: saves/2026-10-17_19-45-02_round05.json;
+Имена файлов — номер раунда и дата и время сохранения: saves/round05_2026-10-17_19-45-02.json;
 автосохранение в начале каждого раунда — с «_auto» (хранятся все), прерванная
 партия — с «_interrupted».
 """
@@ -26,10 +26,10 @@ SAVE_DIR = Path("saves")
 
 
 def default_path(game: Game, kind: str = "", folder: str | Path = SAVE_DIR, round_: int | None = None) -> Path:
-    """saves/<дата>_<время>_round<NN>[_<kind>].json; round_ — номер раунда, если не текущий."""
+    """saves/round<NN>[_<kind>]_<дата>_<время>.json; round_ — номер раунда, если не текущий."""
     number = game.state.round if round_ is None else round_
     stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return Path(folder) / (f"{stamp}_round{number:02d}" + (f"_{kind}" if kind else "") + ".json")
+    return Path(folder) / (f"round{number:02d}" + (f"_{kind}" if kind else "") + f"_{stamp}.json")
 
 
 def autosave(game: Game, folder: str | Path) -> Path:
