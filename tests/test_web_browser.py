@@ -490,6 +490,11 @@ def test_tips(browser):
         faded, fort_tip, found_tip, art_tip = browser.evaluate(blocked)
         assert faded == 2
         assert art_tip is None   # взятого артефакта на карте нет
+        # наведение на аватарку — карта глазами этого игрока, уход курсора возвращает свою
+        glance = browser.evaluate("""(() => { const m = app.map, own = m.you, other = own === 1 ? 0 : 1;
+            m.setHover(null, `player:${other}`); const during = m.you === other && m.own === own;
+            m.setHover(null, null); return [during, m.you === own]; })()""")
+        assert glance == [True, True], glance
         assert "✗ захвачена: Боря" in fort_tip, fort_tip
         assert "✗ бронь: Боря (Башня иллюзий)" in found_tip, found_tip
         browser.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));"
