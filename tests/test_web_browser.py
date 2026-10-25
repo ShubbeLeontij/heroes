@@ -497,6 +497,16 @@ def test_tips(browser):
         assert glance == [True, True], glance
         assert "✗ захвачена: Боря" in fort_tip, fort_tip
         assert "✗ бронь: Боря (Башня иллюзий)" in found_tip, found_tip
+        # своя бронь: объект не полупрозрачный (он доступен), значка нет, но подсказка говорит, чья бронь
+        mine = browser.evaluate("""(() => { const m = app.map, avail = app.state.available;
+            const found = Object.keys(m.regions).find((n) => app.static.regions[n].object === "foundation" && avail.includes(n));
+            for (const st of new Set([app.state, m.state])) Object.assign(st, { reserved: { [found]: m.you }, fortress_owner: {}, artifact_holder: {} });
+            m.redraw();
+            const [x0, y0, x1, y1] = m.regions[found].object.map((v) => v * m.scaleFactor);
+            const tip = m.tipAt([m.tx + (x0 + x1) / 2 * m.k, m.ty + (y0 + y1) / 2 * m.k]);
+            return [tip, document.querySelectorAll("#objects-faded rect").length,
+                    [...m.svg.querySelectorAll("text")].some((t) => t.textContent === "Б")]; })()""")
+        assert mine[0].startswith("object|") and mine[1] == 0 and mine[2] is False, mine
         browser.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));"
                          "document.getElementById('order').click(); 1")
         touch_click = "document.body.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));" \

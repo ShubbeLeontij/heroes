@@ -355,7 +355,7 @@ export class MapView {
   }
 
   // объект, нарисованный на карте под точкой at, и что о нём подсказать: артефакт — всё о нём, крепость,
-  // фундамент и недоступный объект (чужая бронь) — каков он и почему недоступен
+  // фундамент и недоступный или забронированный объект — каков он, почему недоступен и кем забронирован
   tipAt(at) {
     if (!this.geometry || !this.static || !this.state) return null;
     const [x, y] = this.toWorld(at).map((v) => v / this.scaleFactor);
@@ -365,7 +365,7 @@ export class MapView {
       const [x0, y0, x1, y1] = r.object;
       if (!look || x < x0 || x > x1 || y < y0 || y > y1) continue;
       if (kind === "artifact") return `artifact|${name}`;
-      return kind === "fortress" || kind === "foundation" || look === "faded" ? `object|${name}` : null;
+      return kind === "fortress" || kind === "foundation" || look === "faded" || name in this.state.reserved ? `object|${name}` : null;
     }
     return null;
   }
@@ -641,12 +641,6 @@ export class MapView {
       const cx = ax + 2, cy = ay + 8;
       this.svg.append(svg("image", { href: "assets/icons/curse_40.png", x: cx - r, y: cy - r, width: r * 2, height: r * 2 }),
         svg("circle", { cx, cy, r, fill: "none", stroke: color(p), "stroke-width": this.size(3, 2) }));
-    }
-    if (name in state.reserved) {
-      const p = state.reserved[name], r = this.size(10, 8);
-      const rx = bx - 2, ry = ay + 8;
-      this.svg.append(svg("rect", { x: rx - r, y: ry - r, width: r * 2, height: r * 2, fill: color(p), stroke: "white", "stroke-width": this.px(2) }));
-      this.text(rx, ry, "Б", r * 1.2, "center", "square");
     }
     if (kind === "foundation" && this.you !== null) {
       // уровень своего здания вписан в фундамент, как маркером на планшете; чужие не видны
