@@ -26,6 +26,7 @@ const TOKEN_FADED = 0.35;
 const MAX_ZOOM = 5;
 const TAP_MOVE = 8;               // сдвиг пальца больше этого — уже не тап, а перетаскивание
 const LONG_PRESS_MS = 450;        // долгое нажатие — фишки полупрозрачны, пока палец на карте
+const FOUNDATION_HOLE = 0.33;       // центр пустого места фундамента (между камнями) — доля высоты рамки объекта сверху
 const SVG = "http://www.w3.org/2000/svg";
 
 function svg(tag, attrs = {}) {
@@ -346,8 +347,8 @@ export class MapView {
     }
   }
 
-  // объект, нарисованный на карте под точкой at, и что о нём подсказать: артефакт — всё о нём, крепость
-  // и недоступный объект (чужая бронь) — каков он и почему недоступен
+  // объект, нарисованный на карте под точкой at, и что о нём подсказать: артефакт — всё о нём, крепость,
+  // фундамент и недоступный объект (чужая бронь) — каков он и почему недоступен
   tipAt(at) {
     if (!this.geometry || !this.static || !this.state) return null;
     const [x, y] = this.toWorld(at).map((v) => v / this.scaleFactor);
@@ -357,7 +358,7 @@ export class MapView {
       const [x0, y0, x1, y1] = r.object;
       if (!look || x < x0 || x > x1 || y < y0 || y > y1) continue;
       if (kind === "artifact") return `artifact|${name}`;
-      return kind === "fortress" || look === "faded" ? `object|${name}` : null;
+      return kind === "fortress" || kind === "foundation" || look === "faded" ? `object|${name}` : null;
     }
     return null;
   }
@@ -640,7 +641,7 @@ export class MapView {
     if (kind === "foundation" && this.you !== null) {
       // уровень своего здания вписан в фундамент, как маркером на планшете; чужие не видны
       const level = state.players[this.you].foundations[name];
-      if (level) this.text(mid, (ay + by) / 2, String(level), this.size(34, 14), "center", "level");
+      if (level) this.text(mid, ay + (by - ay) * FOUNDATION_HOLE, String(level), this.size(34, 14), "center", "level");
     } else if (kind === "foundation") {   // зритель видит всех: уровни цветом игроков
       const levels = state.players.map((pl, p) => [p, pl.foundations[name]]).filter(([, level]) => level);
       const r = this.size(9, 7), step = r * 2 + this.px(3);

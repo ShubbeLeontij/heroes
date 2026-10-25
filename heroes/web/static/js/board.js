@@ -333,6 +333,11 @@ function objectTip(static_, state, region, you) {
     lines.push(p === you ? h("div.good", "✓ ваша бронь (Башня иллюзий): доступно только вам")
       : h("div.bad", `✗ бронь: ${who(static_, p)} (Башня иллюзий)`));
   }
+  if (r.object === "foundation") {   // у кого что вписано
+    const rows = state.players.map((pl, p) => (pl.foundations[region] ? tipRow(static_, p, h("div", `вписан ${UI.levels[pl.foundations[region]]}`)) : null));
+    if (rows.some(Boolean)) lines.push(rows);
+    else if (!lines.length) lines.push(h("div.muted", "ничего не вписано"));
+  }
   return h("div", h("b", region), h("div", what), lines.length ? lines : h("div.muted", "свободно"));
 }
 
