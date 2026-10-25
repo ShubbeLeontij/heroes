@@ -1,11 +1,11 @@
-"""Имена сохранений: дата, время и номер раунда; автосохранение — в начале каждого раунда, хранятся все."""
+"""Имена сохранений: номер раунда, дата и время; автосохранение — в начале каждого раунда, хранятся все."""
 import re
 
 from heroes import savegame
 from heroes.engine.game import Game
 from heroes.players.random_bot import RandomBot
 
-NAME = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_round(\d{2})(_\w+)?\.json")
+NAME = re.compile(r"round(\d{2})(_[a-z]+)?_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.json")
 
 
 def test_names_have_date_and_round(tmp_path):

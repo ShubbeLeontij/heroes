@@ -19,7 +19,7 @@ python3 -m venv .venv && .venv/bin/pip install pytest   # один раз
 .venv/bin/python -m heroes --players claude,claude --show-thoughts   # Claude против Claude
 .venv/bin/python -m heroes --players claude,claude --watch           # то же, а смотреть — в браузере
 .venv/bin/python -m heroes --players human,claude --model claude-haiku-5-5 --effort low   # дёшево, для отладки
-.venv/bin/python -m heroes --load saves/2026-10-17_19-45-02_round05_auto.json   # продолжить сохранённую
+.venv/bin/python -m heroes --load saves/round05_auto_2026-10-17_19-45-02.json   # продолжить сохранённую
 .venv/bin/python -m heroes --continue                    # продолжить самую свежую
 .venv/bin/python -m heroes --profiles                    # только страница «Профили и статистика»
 .venv/bin/pytest -q                                      # тесты
@@ -44,8 +44,8 @@ python3 -m venv .venv && .venv/bin/pip install pytest   # один раз
 
 Терминал хозяина, сетевой протокол и протокол Claude — на английском (по-русски только оригинальные названия
 игры: регионы, здания, войска). Страница в браузере — по-русски.
-Сохранения лежат в `saves/`, в имени — дата, время и номер раунда: `2026-10-17_19-45-02_round05.json`.
-Автосохранение делается в начале каждого раунда (`…_round05_auto.json`; хранятся все — можно вернуться к любому раунду).
+Сохранения лежат в `saves/`, в имени — номер раунда, дата и время: `round05_2026-10-17_19-45-02.json`.
+Автосохранение делается в начале каждого раунда (`round05_auto_….json`; хранятся все — можно вернуться к любому раунду).
 Сохранить посреди раунда, не прерывая партию, — команда `save` (или `save <файл>`) и Enter в терминале хозяина;
 Ctrl+C сохраняет партию как `…_interrupted.json` и останавливает её у всех.
 
