@@ -67,7 +67,10 @@ class App {
     this.boardStale = false;  // вкладка планшетов скрыта (телефон): перерисовать, когда её откроют
     setSeatAvatar((p) => this.avatarSrc(p));
     setTipProvider((kind, args) => (this.static && this.state ? tipContent(this.static, this.state, kind, args, this.viewer) : null));
-    for (const b of document.querySelectorAll("#tabs button")) b.addEventListener("click", () => this.setView(b.dataset.view));   // решение, журнал
+    for (const b of document.querySelectorAll("#tabs button")) b.addEventListener("click", () => {   // решение, журнал: карта — своя
+      if (this.viewer !== null && this.boardPlayer !== this.viewer) this.openBoard(this.viewer);
+      this.setView(b.dataset.view);
+    });
     $("log-toggle").addEventListener("click", () => this.toggleLog());
     $("log-close").addEventListener("click", () => this.toggleLog(false));
     $("join-watch").addEventListener("click", () => this.join(true));
