@@ -359,6 +359,8 @@ class App {
   refresh() {
     const st = this.state, static_ = this.static;
     $("round").textContent = st.round ? `Раунд ${st.round}/${static_.rounds}` : "Подготовка";
+    if (st.round) $("round").dataset.tip = "rounds";   // при наведении — кто первым ходит в остальных раундах
+    else delete $("round").dataset.tip;
     const phase = this.ended ? null : st.phase;
     const chips = [];
     if (st.round) {

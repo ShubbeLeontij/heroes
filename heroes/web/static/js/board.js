@@ -291,6 +291,7 @@ export function tipContent(static_, state, kind, args, you = null) {
   if (kind === "object") return objectTip(static_, state, args[0], you);
   if (kind === "monster") return monsterTip(static_, state, Number(args[0]), Number(args[1]));
   if (kind === "stock") return stockTip(static_, state, args[0]);
+  if (kind === "rounds") return roundsTip(static_, state, you);
   return null;
 }
 
@@ -354,6 +355,18 @@ function monsterTip(static_, state, owner, i) {
   });
   return h("div", h("div.tip-head", h("img.tip-picture", { src: picture(`monster_${i}`), alt: "" }),
     h("div", h("b", `Чудовище ${i + 1} из ${line.length}`), h("div.muted", "у каждого — в своей линии"))), rows);
+}
+
+// кто первым ходит в этом и во всех следующих раундах: первый игрок сдвигается на одного по кругу каждый раунд
+function roundsTip(static_, state, you) {
+  const n = static_.names.length, from = Math.max(1, state.round);
+  const rows = [];
+  for (let r = from; r <= static_.rounds; r++) {
+    const p = (static_.first_player + r - 1) % n, now = r === state.round ? ".now" : "";
+    rows.push(h("tr", h("td" + now, `Раунд ${r}`),
+      h("th.player" + now, { style: { "--seat": color(p) } }, nameOf(static_, p, true) + (p === you ? " (вы)" : ""))));
+  }
+  return h("div", h("b", "Кто ходит первым"), h("table.tip-table", h("tbody", rows)));
 }
 
 // ресурсы всех игроков; столбец того, на который навели, выделен
