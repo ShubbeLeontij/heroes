@@ -12,7 +12,7 @@ from ..engine.actions import buildable
 from ..engine.combat import army_strength, artifact_condition
 from ..engine.data import TERRAINS
 from ..engine.economy import holdings, token_vp
-from ..engine.effects import building_cost, effects_of, hire_cost, hireable_units, hydra_unit, move_cost, unit_strength
+from ..engine.effects import building_cost, effects_of, hire_cost, hireable_units, hydra_unit, move_cost, preview_battle, unit_strength
 from ..engine.scoring import CATEGORIES, score_player
 from ..engine.state import ACTION_NAMES, RESOURCE_NAMES, RESOURCE_VP, ROUNDS, TERRAIN_NAMES
 
@@ -91,8 +91,9 @@ def condition_text(cond: dict) -> str:
 def units_line(game: Game, p: int) -> str:
     units = game.state.players[p].units
     faction = game.faction_of(p)
-    parts = [f"{faction.units[u].name} ×{n} (strength {unit_strength(game, p, u)})" for u, n in units.items() if n]
-    total = army_strength(game, p, units)
+    battle = preview_battle(game, p)
+    parts = [f"{faction.units[u].name} ×{n} (strength {unit_strength(game, p, u, battle)})" for u, n in units.items() if n]
+    total = army_strength(game, p, units, battle)
     return (", ".join(parts) + f"; total strength {total}") if parts else "no units"
 
 
@@ -129,9 +130,9 @@ def board(game: Game, p: int, own: bool = True) -> str:
     hireable = hireable_units(game, p)
     for uid, unit in faction.units.items():
         status = "hireable" if uid in hireable else "hiring building not built"
-        lines.append(f"  {unit.name} ×{player.units.get(uid, 0)}: strength {unit_strength(game, p, uid)}, "
+        lines.append(f"  {unit.name} ×{player.units.get(uid, 0)}: strength {unit_strength(game, p, uid, preview_battle(game, p))}, "
                      f"hire {res(hire_cost(game, p, uid))} ({status})")
-    lines.append(f"  Total army strength: {army_strength(game, p, player.units)}")
+    lines.append(f"  Total army strength: {army_strength(game, p, player.units, preview_battle(game, p))}")
 
     lines.append("Buildings (✓ built, + can be built with a build action of its level):")
     can_build = set(buildable(game, p, 4))
