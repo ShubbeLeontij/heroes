@@ -393,10 +393,12 @@ export class MapView {
 
   setHover(region, token) {
     if (token !== this.tokenHover) {
+      const before = this.routeOwner(this.tokenHover);
       this.tokenHover = token;
       for (const el of this.html.querySelectorAll(".token[data-key]")) {
         el.classList.toggle("faded", el.dataset.key === token);
       }
+      if (this.routeOwner(token) !== before) this.redraw();   // путь того, на чью аватарку навели
     }
     if (region === this.hover) return;
     this.hover = region;
@@ -651,10 +653,16 @@ export class MapView {
     }
   }
 
-  // свой маршрут: изогнутая стрелка на каждое перемещение, последнее — ярче
+  // чей маршрут рисовать: того, на чью аватарку навели курсор, иначе хозяина карты
+  routeOwner(token) {
+    return token ? Number(token.split(":")[1]) : this.you;
+  }
+
+  // маршрут: изогнутая стрелка на каждое перемещение, последнее — ярче
   routes() {
-    if (this.you === null) return;
-    const routes = this.state.players[this.you].routes || [];
+    const who = this.routeOwner(this.tokenHover);
+    if (who === null) return;
+    const routes = this.state.players[who].routes || [];
     if (!routes.length) return;
     const defs = this.svg.querySelector("defs");
     routes.forEach(([a, b], k) => {
