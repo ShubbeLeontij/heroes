@@ -205,6 +205,25 @@ def test_summary_helpers(browser):
         assert value == expected, expr
 
 
+def test_object_look(browser):
+    """Забранный артефакт с карты исчезает; захваченная крепость и чужая бронь остаются полупрозрачными."""
+    network = cli.Network(0, "secret", log_fn=lambda text: None)
+    network.seat("Гость")
+    network.server.start()
+    try:
+        browser.open(f"http://127.0.0.1:{network.server.port}/")
+        browser.wait_for("window.app")
+        got = json.loads(browser.evaluate("""(async () => {
+          const { objectLook } = await import("./static/js/map.js");
+          const st = { fortress_owner: { Ф: 0 }, artifact_holder: { А: 1 }, reserved: { Б: 2 } };
+          return JSON.stringify([objectLook(st, "А", "artifact", 0), objectLook(st, "Ф", "fortress", 0),
+            objectLook(st, "Б", "artifact", 0), objectLook(st, "Б", "artifact", 2), objectLook(st, "Я", "artifact", 0)]);
+        })()"""))
+    finally:
+        network.server.close()
+    assert got == [None, "faded", "faded", "shown", "shown"]
+
+
 def test_spectator_watches_in_browser(browser):
     """«Смотреть партию»: место за столом не занято, страница показывает партию ботов до конца."""
     network = cli.Network(0, None, log_fn=lambda text: None)
@@ -431,7 +450,7 @@ def test_tips(browser):
         browser.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));"
                          "document.getElementById('order').click(); 1")   # тап мимо — закрыть
         assert browser.evaluate(tip) is None
-        # захваченная крепость, взятый артефакт и чужая бронь — полупрозрачные, подсказка — почему недоступны
+        # захваченная крепость и чужая бронь — полупрозрачные, подсказка — почему недоступны; взятого артефакта нет
         blocked = """(() => { const m = app.map, avail = app.state.available;
             const find = (kind) => Object.keys(m.regions).find((n) => app.static.regions[n].object === kind && avail.includes(n));
             const fort = find("fortress"), found = find("foundation"), art = find("artifact");
@@ -448,11 +467,10 @@ def test_tips(browser):
             const fortTip = document.querySelector(".tip").textContent;
             m.objectTip(at(found));
             const foundTip = document.querySelector(".tip").textContent;
-            m.objectTip(at(art));
-            return [faded, fortTip, foundTip, document.querySelector(".tip").textContent]; })()"""
+            return [faded, fortTip, foundTip, m.tipAt(at(art))]; })()"""
         faded, fort_tip, found_tip, art_tip = browser.evaluate(blocked)
-        assert faded == 3
-        assert "✗ взят: Боря" in art_tip, art_tip
+        assert faded == 2
+        assert art_tip is None   # взятого артефакта на карте нет
         assert "✗ захвачена: Боря" in fort_tip, fort_tip
         assert "✗ бронь: Боря (Башня иллюзий)" in found_tip, found_tip
         browser.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));"

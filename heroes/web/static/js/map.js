@@ -45,11 +45,11 @@ function inside(x, y, polygon) {
   return hit;
 }
 
-// как виден объект региона: "shown" или "faded" — полупрозрачный, недоступен (захваченная крепость, взятый
-// артефакт, чужая бронь Башней иллюзий; подсказка объясняет почему)
+// как виден объект региона: "shown", "faded" — полупрозрачный, недоступен (захваченная крепость, чужая бронь
+// Башней иллюзий; подсказка объясняет почему) или null — забранного артефакта на карте больше нет
 export function objectLook(state, region, kind, you = null) {
   if (kind === "fortress" && region in state.fortress_owner) return "faded";
-  if (kind === "artifact" && region in state.artifact_holder) return "faded";
+  if (kind === "artifact" && region in state.artifact_holder) return null;
   if (region in state.reserved && state.reserved[region] !== you) return "faded";
   return "shown";
 }
