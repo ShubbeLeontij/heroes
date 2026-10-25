@@ -181,7 +181,7 @@ export class MapView {
     if (this.preview !== null) reach = this.preview[String(this.you)];
     else if (this.you === this.viewer) return null;
     else reach = this.state.players[this.you].reach;
-    if (!reach) return null;
+    if (!reach || !Object.keys(reach).length) return null;   // вне фазы перемещения у чужого планшета нет досягаемости: карта как своя
     return Object.fromEntries(Object.entries(reach).map(([r, cost]) => [r, cost ? `${cost}${mark("mp")}` : "остаться"]));
   }
 
