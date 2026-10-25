@@ -15,7 +15,7 @@ from ..engine.data import TERRAINS
 from ..engine.economy import holdings
 from ..engine.movement import reachable
 from ..engine.effects import (Battle, active_effects, battle_bonus, effects_of, hire_cost, hireable_units, hydra_unit,
-                              move_cost, unit_strength)
+                              move_cost, preview_battle, unit_strength)
 from ..engine.scoring import score_player
 from ..engine.state import RESOURCE_VP, ROUNDS
 
@@ -168,7 +168,7 @@ def snapshot(game: Game) -> dict:
                             "hire_cost": hire_cost(game, p, uid), "hireable": uid in hireable,
                             "mods": mods.get(uid, [])}
                       for uid in faction.units},
-            "army_strength": army_strength(game, p, pl.units),
+            "army_strength": army_strength(game, p, pl.units, preview_battle(game, p)),
             "built": list(pl.built),
             "buildable": buildable(game, p, 4),
             "foundations": dict(pl.foundations),

@@ -21,6 +21,16 @@ class Battle:
     region: str
 
 
+def preview_battle(game: Game, p: int) -> Battle | None:
+    """Сражение «вообще» для сводки силы на планшете: в регионе игрока (горы, Металка), а у ничьей крепости — штурм
+    (Мастерская). None — игрок ещё не на карте."""
+    region = game.state.players[p].region
+    if not region:
+        return None
+    fortress = game.map.regions[region].object == "fortress" and region not in game.state.fortress_owner
+    return Battle("fortress" if fortress else "pvp", region)
+
+
 def active_effects(game: Game, p: int) -> list[dict]:
     """Эффекты под звёздочкой (unit_property) — свойства войск: действуют, даже если здание не построено
     (правила, с. 4)."""

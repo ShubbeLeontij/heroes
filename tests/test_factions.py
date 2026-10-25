@@ -432,6 +432,24 @@ def test_old_saves_with_separate_raise_and_buy_questions_still_replay():
     assert player.move_points == 3 and player.resources["wood"] == 0
 
 
+def test_army_preview_counts_metal_shop_and_scouts_in_mountains():
+    """Сводка силы на планшете считает, как в сражении в регионе игрока: Металка и разведчики в горах."""
+    from heroes.protocol.snapshot import snapshot
+    game = make(["orcs", "humans"])
+    player = game.state.players[0]
+    player.units = {"scout": 3, "brute": 0, "blaster": 0}
+    total = lambda: snapshot(game)["players"][0]["army_strength"]
+    mountain = next(r for r in game.state.available if game.terrain(r) == "mountain"
+                    and game.map.regions[r].object != "fortress")
+    player.region = next(r for r in game.state.available if game.terrain(r) != "mountain"
+                         and game.map.regions[r].object != "fortress")
+    assert total() == 6
+    player.built.append("metal_shop")
+    assert total() == 10
+    player.region = mountain
+    assert total() == 16
+
+
 # --- Эльфы ------------------------------------------------------------------------------------
 
 def test_armorer_example():
