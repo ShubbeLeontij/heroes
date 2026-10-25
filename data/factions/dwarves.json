@@ -43,7 +43,7 @@
       "text_board": "Наём механиков. *Каждый механик в сражении удваивает {power} 1 любой боевой единицы.",
       "effects": [
         {"type": "hire", "unit": "mechanic"},
-        {"type": "double_unit_strength", "unit": "mechanic", "targets": 1}
+        {"type": "double_unit_strength", "unit_property": true, "unit": "mechanic", "targets": 1}
       ]
     },
     "gatherers": {
@@ -94,7 +94,7 @@
       "text_board": "Наём автоматонов. *При найме каждого автоматона +1{science}.",
       "effects": [
         {"type": "hire", "unit": "automaton"},
-        {"type": "science_per_hire", "unit": "automaton", "value": 1}
+        {"type": "science_per_hire", "unit_property": true, "unit": "automaton", "value": 1}
       ]
     },
     "bank": {
@@ -113,7 +113,7 @@
       "text_board": "Наём мехозавров. *Мехозавры получают +1{power} за каждые 3{science}.",
       "effects": [
         {"type": "hire", "unit": "mechasaur"},
-        {"type": "strength_per_science", "unit": "mechasaur", "per": 3, "value": 1}
+        {"type": "strength_per_science", "unit_property": true, "unit": "mechasaur", "per": 3, "value": 1}
       ]
     }
   },

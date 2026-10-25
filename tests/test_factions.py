@@ -350,6 +350,17 @@ def test_orc_strength_by_battle_and_rage_vp():
     assert scoring.score_player(game, 0)["resources"] == 4
 
 
+def test_asterisk_properties_work_without_the_building():
+    """Правила, с. 4: эффект под звёздочкой — свойство войск, оно действует и без здания."""
+    game = make(["orcs", "humans"])
+    assert game.state.players[0].built == []
+    army = {"blaster": 1, "scout": 1}
+    assert army_strength(game, 0, army, Battle("fortress", "Бринлор")) == 12 + 4
+    assert combat.check_commit(game, 0, army, army, Battle("fortress", "Бринлор"), 14) is None
+    assert unit_strength(game, 0, "blaster", Battle("monster", "Бринлор")) == 9
+    assert "blaster" not in actions.hireable_units(game, 0)
+
+
 def test_chiefs_house_raises_current_and_past_actions():
     orc = Scripted(raise_action={"build": 2, "wood": 1})
     game = make(["orcs", "humans"], [orc, Scripted()])

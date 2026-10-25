@@ -174,10 +174,10 @@ def test_unit_mods_show_what_applies_now():
     assert units["ent"]["mods"] == [{"value": 10, "kind": "pay", "cost": {"wood": 1}, "active": False}]
     elves.resources["wood"] = 1
     assert snapshot(game)["players"][0]["units"]["ent"]["mods"][0]["active"]
+    # Лагерь: разведчик в горах — 4; Мастерская: подрывник против крепости — 12. Это свойства войск
+    # (звёздочка на планшете): действуют и без зданий
     orc_units = snapshot(game)["players"][1]["units"]
-    assert orc_units["scout"]["mods"] == [{"value": 4, "kind": "terrain", "terrain": "mountain", "active": False}]
-    orcs.built += ["camp", "workshop"]   # Лагерь: разведчик в горах — 4; Мастерская: подрывник против крепости — 12
-    orc_units = snapshot(game)["players"][1]["units"]
+    assert orc_units["scout"]["mods"] == [{"value": 4, "kind": "terrain", "terrain": "mountain", "active": True}]
     assert orc_units["scout"]["mods"][0]["active"] and orc_units["blaster"]["mods"][0]["active"]
     orcs.region = "Есмор"   # поле, крепости нет
     orc_units = snapshot(game)["players"][1]["units"]

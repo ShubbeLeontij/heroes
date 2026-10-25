@@ -47,7 +47,7 @@
       "text_board": "Наём грифонов. *Можете забирать {artifact} за {wood}, если грифонов в вашем войске ≥ цене этого {artifact} в {wood}.",
       "effects": [
         {"type": "hire", "unit": "griffin"},
-        {"type": "artifact_for_wood", "unit": "griffin",
+        {"type": "artifact_for_wood", "unit_property": true, "unit": "griffin",
          "prices": {"Золен": 2, "Шог Ид": 2, "Содмур": 3, "Цурт": 4, "Таскар": 5, "Дорталь": 6}}
       ]
     },

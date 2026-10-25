@@ -75,7 +75,7 @@
       "text_board": "Наём палачей. *Их {power} равна вашим {mp} в этом раунде (включая дополнительные).",
       "effects": [
         {"type": "hire", "unit": "executioner"},
-        {"type": "strength_equals_move_points", "unit": "executioner"}
+        {"type": "strength_equals_move_points", "unit_property": true, "unit": "executioner"}
       ]
     },
     "chapel": {
@@ -110,7 +110,7 @@
       "text_board": "Наём личей. *Если лич участвовал в сражении, он воскрешает всех погибших в нём скелетов.",
       "effects": [
         {"type": "hire", "unit": "lich"},
-        {"type": "resurrect_if_present", "unit": "skeleton", "trigger_unit": "lich"}
+        {"type": "resurrect_if_present", "unit_property": true, "unit": "skeleton", "trigger_unit": "lich"}
       ]
     }
   },

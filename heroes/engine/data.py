@@ -254,6 +254,12 @@ def validate_faction(faction: Faction, game_map: GameMap) -> list[str]:
     all_effects += [(f"artifact {r}", e) for r, a in faction.artifacts.items() for e in a.effects]
     all_effects += [(r.name, e) for r in faction.rules.values() for e in r.effects]
     paid_with = set(RESOURCES) | set(TOKENS) | faction.resource_units()
+    for b in faction.buildings.values():   # звёздочка на планшете — свойство войск (unit_property)
+        if ("*" in b.text_board) != any(e.get("unit_property") for e in b.effects):
+            errors.append(f"{b.name}: unit_property must mark exactly the effects under an asterisk")
+    for item in [*faction.artifacts.values(), *faction.rules.values()]:
+        if any(e.get("unit_property") for e in item.effects):
+            errors.append(f"{item.text}: unit_property is only for building effects")
     for owner, e in all_effects:
         if e["type"] not in EFFECT_TYPES:
             errors.append(f"{owner}: unknown effect {e['type']}")

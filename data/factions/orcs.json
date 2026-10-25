@@ -66,7 +66,7 @@
       "text_board": "Наём разведчиков. *Их {power} увеличивается до 4, если сражение в {mountain} регионе.",
       "effects": [
         {"type": "hire", "unit": "scout"},
-        {"type": "terrain_strength", "unit": "scout", "terrain": "mountain", "value": 4}
+        {"type": "terrain_strength", "unit_property": true, "unit": "scout", "terrain": "mountain", "value": 4}
       ]
     },
     "chiefs_house": {
@@ -117,7 +117,7 @@
       "text_board": "Наём взрывателей. *Их {power} увеличивается до 12 при захвате крепостей.",
       "effects": [
         {"type": "hire", "unit": "blaster"},
-        {"type": "fortress_strength", "unit": "blaster", "value": 12}
+        {"type": "fortress_strength", "unit_property": true, "unit": "blaster", "value": 12}
       ]
     }
   },

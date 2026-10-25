@@ -144,7 +144,9 @@ def board(game: Game, p: int, own: bool = True) -> str:
             req = f"; requires: {req}" if req else ""
             cost = building_cost(game, p, bid)
             cost_text = res(b.cost) + (f" (for {you}: {res(cost)})" if cost != b.cost and bid not in player.built else "")
-            lines.append(f"  {mark} {LEVELS[level]:>3} {b.name} [{bid}] — {b.vp} VP, cost {cost_text}{req}. {b.text}")
+            prop = (" (The effect after hiring is a property of the units: it applies even if the building "
+                    "is not built.)" if any(e.get("unit_property") for e in b.effects) else "")
+            lines.append(f"  {mark} {LEVELS[level]:>3} {b.name} [{bid}] — {b.vp} VP, cost {cost_text}{req}. {b.text}{prop}")
 
     lines.append("Artifacts (region: condition → effect):")
     for region_name, art in faction.artifacts.items():

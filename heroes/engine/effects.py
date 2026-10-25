@@ -22,9 +22,12 @@ class Battle:
 
 
 def active_effects(game: Game, p: int) -> list[dict]:
+    """Эффекты под звёздочкой (unit_property) — свойства войск: действуют, даже если здание не построено
+    (правила, с. 4)."""
     faction = game.faction_of(p)
+    built = game.state.players[p].built
     effects = [e for rule in faction.rules.values() for e in rule.effects]
-    effects += [e for bid in game.state.players[p].built for e in faction.buildings[bid].effects]
+    effects += [e for bid, b in faction.buildings.items() for e in b.effects if bid in built or e.get("unit_property")]
     for region in game.state.artifacts_of(p):
         effects += [e for e in faction.artifacts[region].effects if e["type"] not in ONE_TIME_EFFECTS]
     return effects
@@ -41,9 +44,10 @@ def has_effect(game: Game, p: int, effect_type: str) -> bool:
 def source_name(game: Game, p: int, effect_type: str) -> str:
     """Название здания, свойства или артефакта, дающего эффект, — для текстов вопросов и журнала."""
     faction = game.faction_of(p)
-    for bid in game.state.players[p].built:
-        if any(e["type"] == effect_type for e in faction.buildings[bid].effects):
-            return faction.buildings[bid].name
+    built = game.state.players[p].built
+    for bid, b in faction.buildings.items():
+        if any(e["type"] == effect_type and (bid in built or e.get("unit_property")) for e in b.effects):
+            return b.name
     for rule in faction.rules.values():
         if any(e["type"] == effect_type for e in rule.effects):
             return rule.name
