@@ -84,7 +84,10 @@ def accept(sock: socket.socket, password: str | None = None) -> WebSocketConnect
             path = unquote(urlsplit(target).path).strip("/")
             if path == "ws" and headers.get("upgrade", "").lower() == "websocket":
                 return upgrade(sock, headers, buffer)
-            if method == "POST" and path == "profiles":
+            if method == "GET" and path == "access":   # нужен ли пароль: без него страница сразу предлагает места
+                respond(sock, 200, json.dumps({"password": bool(password)}).encode("utf-8"),
+                        {"Content-Type": TYPES[".json"], "Cache-Control": "no-store"})
+            elif method == "POST" and path == "profiles":
                 length = int(headers.get("content-length") or 0)
                 if not 0 <= length <= MAX_MESSAGE:
                     raise ValueError("body too long")
