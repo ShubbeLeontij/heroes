@@ -181,7 +181,7 @@ export class MapView {
     if (this.preview !== null) reach = this.preview[String(this.you)];
     else if (this.you === this.viewer) return null;
     else reach = this.state.players[this.you].reach;
-    if (!reach || !Object.keys(reach).length) return null;   // вне фазы перемещения у чужого планшета нет досягаемости: карта как своя
+    if (!reach) return null;
     return Object.fromEntries(Object.entries(reach).map(([r, cost]) => [r, cost ? `${cost}${mark("mp")}` : "остаться"]));
   }
 
@@ -659,6 +659,25 @@ export class MapView {
     return token ? Number(token.split(":")[1]) : this.you;
   }
 
+  // откуда и куда идёт стрелка: середина объекта региона (фундамент, крепость, артефакт, портал), иначе центр региона
+  objectSpot(name) {
+    const r = this.regions[name];
+    if (!r.object) return r.center;
+    const [x0, y0, x1, y1] = r.object;
+    return [(x0 + x1) / 2, (y0 + y1) / 2];
+  }
+
+  // расстояние от середины объекта до его края по направлению (ux, uy) плюс зазор: стрелка не касается рисунка;
+  // у региона без объекта — небольшой отступ от центра
+  edgeGap(name, ux, uy) {
+    const r = this.regions[name], margin = this.size(10, 7);
+    if (!r.object) return margin * 2;
+    const [x0, y0, x1, y1] = r.object.map((v) => v * this.scaleFactor);
+    const hw = (x1 - x0) / 2, hh = (y1 - y0) / 2;
+    const reach = Math.min(Math.abs(ux) > 1e-6 ? hw / Math.abs(ux) : Infinity, Math.abs(uy) > 1e-6 ? hh / Math.abs(uy) : Infinity);
+    return reach + margin;
+  }
+
   // маршрут: изогнутая стрелка на каждое перемещение, последнее — ярче
   routes() {
     const who = this.routeOwner(this.tokenHover);
@@ -673,11 +692,12 @@ export class MapView {
       const marker = svg("marker", { id, viewBox: "0 0 10 10", refX: 6, refY: 5, markerWidth: 4, markerHeight: 4, orient: "auto-start-reverse" });
       marker.append(svg("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: col }));
       defs.append(marker);
-      let [x0, y0] = this.xy(this.regions[a].center), [x1, y1] = this.xy(this.regions[b].center);
+      let [x0, y0] = this.xy(this.objectSpot(a)), [x1, y1] = this.xy(this.objectSpot(b));
       const dx = x1 - x0, dy = y1 - y0, length = Math.max(1, Math.hypot(dx, dy));
       const ux = dx / length, uy = dy / length;
-      const trim = Math.min(length / 4, 16);
-      x0 += ux * trim; y0 += uy * trim; x1 -= ux * trim; y1 -= uy * trim;
+      let t0 = this.edgeGap(a, ux, uy), t1 = this.edgeGap(b, -ux, -uy);
+      if (t0 + t1 > length * 0.8) { const f = length * 0.8 / (t0 + t1); t0 *= f; t1 *= f; }
+      x0 += ux * t0; y0 += uy * t0; x1 -= ux * t1; y1 -= uy * t1;
       const bend = Math.min(0.2 * length, 70);
       const cx = (x0 + x1) / 2 - uy * bend, cy = (y0 + y1) / 2 + ux * bend;
       this.svg.append(svg("path", { d: `M ${x0} ${y0} Q ${cx} ${cy} ${x1} ${y1}`, fill: "none", stroke: col, "stroke-width": width,
