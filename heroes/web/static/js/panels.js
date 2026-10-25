@@ -571,7 +571,7 @@ class BuildRecruit extends Panel {
     if (data.rejected) this.note(`✗ Шаг не выполнен: ${data.rejected.error}`, "bad");
     const f = data.foundation;
     if (f && !data.built) {
-      this.note(`Вы в регионе ${f.region} с фундаментом (вписан ${UI.levels[f.level]}): здание более `
+      this.note(`Вы в регионе ${f.region} с фундаментом${f.level ? ` (вписан ${UI.levels[f.level]})` : ""}: здание более `
         + "высокого уровня возводится на нём автоматически и приносит столько ПО, каков его уровень.", "hint");
     }
     const cols = h("div.columns");
