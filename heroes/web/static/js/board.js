@@ -117,7 +117,7 @@ export class BoardView {
       const cells = [];
       for (let i = 0; i <= science.max; i++) {
         cells.push(h("span.science-cell" + (i <= have ? ".have" : "") + (i in free ? ".free" : "") + (i === have ? ".now" : ""),
-          String(i), i in free ? h("small", `${free[i]}${mark("build")}`) : null));
+          String(i), i in free ? h("small", free[i]) : null));
       }
       out.append(h("div.science", h("b", `Наука ${have}${mark("science")}`), h("div.science-scale", cells)));
     }
