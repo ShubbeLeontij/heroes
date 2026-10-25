@@ -224,6 +224,25 @@ def test_object_look(browser):
     assert got == [None, "faded", "faded", "shown", "shown"]
 
 
+def test_other_player_map_not_washed_outside_movement(browser):
+    """Карта другого игрока вне фазы перемещения (нет досягаемости) не светлеет; в фазу перемещения — обводка досягаемости."""
+    network = cli.Network(0, "secret", log_fn=lambda text: None)
+    network.seat("Гость")
+    network.server.start()
+    try:
+        browser.open(f"http://127.0.0.1:{network.server.port}/")
+        browser.wait_for("window.app")
+        got = json.loads(browser.evaluate("""(async () => {
+          const { MapView } = await import("./static/js/map.js");
+          const shown = (reach) => MapView.prototype.shownOptions.call({ you: 1, viewer: 0, options: null, preview: null,
+            picking: () => false, state: { players: [{}, { reach }] } });
+          return JSON.stringify([shown({}), shown({ Золен: 0, Цурт: 3 })]);
+        })()"""))
+    finally:
+        network.server.close()
+    assert got == [None, {"Золен": "остаться", "Цурт": "3" + M["mp"]}]
+
+
 def test_spectator_watches_in_browser(browser):
     """«Смотреть партию»: место за столом не занято, страница показывает партию ботов до конца."""
     network = cli.Network(0, None, log_fn=lambda text: None)
