@@ -96,3 +96,30 @@ def test_heroes_run_sandbox(tmp_path, saved, strategy_dir):
     out = subprocess.run([str(ws.bin / "heroes-run"), "probe.py"], capture_output=True, text=True, timeout=60).stdout
     assert "round 5" in out and "logs visible False" in out and "notes visible False" in out and "no network" in out
     assert (ws.dir / "out.txt").read_text() == "ok"
+
+
+def test_agent_tools(saved, capsys):
+    from heroes import agent_tools
+    s = sim.load(saved.path)
+    out = {name: agent_tools.TOOLS[name](s.game, s.me, "5" if name == "reach" else None) for name in agent_tools.TOOLS}
+    assert "army strength now" in out["max_strength"]
+    assert "army strength now" in agent_tools.max_strength(s.game, s.me, "1") and "(you)" not in agent_tools.max_strength(s.game, s.me, "1")
+    assert "You choose the action order" in out["schedule"] and "round 5" in out["schedule"].lower()
+    assert "L1" in out["tree"] and "opens:" in out["tree"]
+    assert out["reach"].startswith("From ") and "MP" in out["reach"]
+    assert "→" in out["artifacts"] and "Fortresses" in out["fortresses"] and "[NEXT]" in out["monsters"]
+    assert "TOTAL" in out["scores"] and "gold" in out["stockpile"]
+    with pytest.raises(agent_tools.ToolError):
+        agent_tools.player_arg(s.game, s.me, "nobody")
+    assert "rounds: 7, 10, 13, 16" in out["schedule"]   # игрок 0, первый игрок 5-го раунда — игрок 1
+
+
+@pytest.mark.skipif(not workspace.available(), reason="bwrap is not installed")
+def test_heroes_tool_sandbox(tmp_path, saved, strategy_dir):
+    ws = workspace.Workspace("m/high", "s1", tmp_path / "work")
+    ws.prepare()
+    ws.game_file.write_bytes(saved.path.read_bytes())
+    out = subprocess.run([str(ws.bin / "heroes-tool"), "schedule"], capture_output=True, text=True, timeout=60).stdout
+    assert "You choose the action order" in out
+    out = subprocess.run([str(ws.bin / "heroes-tool"), "tree", "nobody"], capture_output=True, text=True, timeout=60).stdout
+    assert out.startswith("error: unknown player")

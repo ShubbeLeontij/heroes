@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from .. import sim
 from ..engine import scoring
-from ..protocol import journal, notes, prompts, schemas
+from ..protocol import journal, notes, prompts, schemas, tool_log
 from ..protocol import render_text as R
 from .base import Player
 from .random_bot import RandomBot
@@ -112,6 +112,9 @@ class ClaudePlayer(Player):
         # движок задаёт уже другой вопрос, и ошибка в него не попадает
         self.pending_error: tuple[Decision, str] | None = None
         self.last_comment = ""
+        self.where: tuple[int, str] = (0, "")        # раунд и вид вопроса, на который идёт вызов Claude
+        self.reported = 0                            # сколько записей tool_log уже вошло в отчёт перед разбором
+        self.tool_log: list[dict] = []               # {round, kind, tool, detail}: что запускал Claude
         self.game: Game | None = None
         self.cost_usd = 0.0
         self.calls = 0
@@ -229,8 +232,9 @@ class ClaudePlayer(Player):
         opponents = opponent_kinds(game, p)
         allowed = [notes.GENERAL, notes.REMINDERS, *(f for f, kind in opponents.items() if kind != "random bot")]
         prompt = prompts.reflection(game, p, self.variant, opponents, allowed, self.new_events(game),
-                                    journal.history(self.variant, faction), self.tools)
-        review, changes, comment, last_error = "", None, "", None
+                                    journal.history(self.variant, faction), self.tools, self.tools_report(game, p))
+        self.reported = len(self.tool_log)
+        review, changes, rules_add, tools_missing, comment, last_error = "", None, [], [], "", None
         for _ in range(self.retries + 1):
             try:
                 result = self.ask(game, p, "game_over", prompt)
@@ -239,6 +243,8 @@ class ClaudePlayer(Player):
                 if not isinstance(review, str) or not review.strip():
                     raise ValueError('"review" must be a non-empty string')
                 changes = notes.validate(answer, allowed)
+                rules_add = notes.validate_rules_add(answer)
+                tools_missing = notes.validate_tools_missing(answer)
             except ClaudeError as e:
                 last_error = str(e)
                 continue
@@ -263,6 +269,21 @@ class ClaudePlayer(Player):
                 outcome.append(f"strategy notes updated ({', '.join(changes)}): {notes.path(self.variant, faction)}")
             except OSError as e:
                 outcome.append(f"could not write the strategy notes: {e}")
+        if rules_add and not last_error:
+            try:
+                if rules := notes.add_rules(rules_add):
+                    paths.append(rules)
+                    outcome.append(f"special rules added: {'; '.join(rules_add)}")
+            except (OSError, ValueError) as e:
+                outcome.append(f"could not add the special rules: {e}")
+        if tools_missing and not last_error:
+            where = f"{self.variant} · {game.state.players[p].name} ({game.faction_of(p).name}) · game {str(game.meta.get('game_id'))[:8]}"
+            try:
+                journal.log_tools_wanted(where, tools_missing)
+                paths.append(journal.tools_wanted_path())
+                outcome.append(f"tools missing: {'; '.join(tools_missing)}")
+            except OSError as e:
+                outcome.append(f"could not record the missing tools: {e}")
         if self.workspace:
             scripts = self.workspace.sync_back(faction)
             if scripts:
@@ -276,6 +297,20 @@ class ClaudePlayer(Player):
         if journal.commit(paths, f"{name}: {comment or 'game results'}"[:150], body):
             outcome.append("committed to git")
         return review, "; ".join(outcome)
+
+    def tools_report(self, game: Game, p: int, review: bool = False) -> str:
+        """Автоматический отчёт (не от модели): какие инструменты и на каком вопросе запускал Claude.
+        Идёт в журнал и в вопрос о разборе партии, потом — отдельно то, что он запускал во время разбора
+        (review=True); сохраняется в logs/claude/<сессия>.tools.txt."""
+        entries = self.tool_log[self.reported:] if review else self.tool_log[:self.reported or len(self.tool_log)]
+        who = game.state.players[p].name + (" while reviewing" if review else "")
+        text = tool_log.report(who, entries, self.calls, self.tools)
+        if self.transcript_dir and not review:
+            try:
+                tool_log.save(self.transcript_dir / f"{self.session_id}.tools.txt", text)
+            except OSError:
+                pass
+        return text
 
     def result_row(self, game: Game, p: int) -> dict:
         """Строка results.csv для этого игрока."""
@@ -327,6 +362,7 @@ class ClaudePlayer(Player):
     def ask(self, game: Game, p: int, kind: str, prompt: str) -> dict:
         """Один вопрос Claude; первый вызов сессии несёт системный промпт. Для симуляции
         сохраняется текущий момент партии (у нескольких вопросов сразу, «destination+hydra_destination», — первый)."""
+        self.where = (game.state.round, kind)
         if self.workspace:
             if not self.prepared:
                 self.workspace.prepare()
@@ -343,6 +379,8 @@ class ClaudePlayer(Player):
         if not wanted:
             return result
         shown.update(wanted)
+        self.tool_log.append({"round": game.state.round, "kind": kind, "tool": "view_boards",
+                              "detail": ", ".join(game.state.players[q].name for q in wanted)})
         boards = [R.board(game, q, own=q == p) for q in wanted]
         return self.ask(game, p, kind, "\n\n".join(boards) + f"\n\nNow answer the same question ({kind}).")
 
@@ -370,7 +408,7 @@ class ClaudePlayer(Player):
         self.workdir.mkdir(parents=True, exist_ok=True)
         tools = self.workspace.cli_args() if self.workspace else ["--tools", ""]
         cmd = [self.binary, "-p", "--model", self.model, *tools, "--strict-mcp-config",
-               "--setting-sources", "", "--output-format", "json", "--json-schema", json.dumps(schema, ensure_ascii=False)]
+               "--setting-sources", "", "--output-format", "stream-json", "--verbose", "--json-schema", json.dumps(schema, ensure_ascii=False)]
         if self.effort:
             cmd += ["--effort", self.effort]
         if system is None:
@@ -389,10 +427,10 @@ class ClaudePlayer(Player):
         except subprocess.TimeoutExpired:
             raise ClaudeError(f"no answer within {self.timeout:.0f} s") from None
         elapsed = time.monotonic() - started
-        try:
-            out = json.loads(proc.stdout)
-        except json.JSONDecodeError:
-            raise ClaudeError(f"exit code {proc.returncode}: {(proc.stderr or proc.stdout).strip()[:300]}") from None
+        out, used = tool_log.parse_stream(proc.stdout)
+        if out is None:
+            raise ClaudeError(f"exit code {proc.returncode}: {(proc.stderr or proc.stdout).strip()[-300:]}")
+        self.tool_log += [{"round": self.where[0], "kind": self.where[1], **call} for call in used]
         if out.get("session_id") == self.session_id:
             self.started = True
         self.calls += 1
@@ -404,17 +442,19 @@ class ClaudePlayer(Player):
                 result = json.loads(out["result"])
             except json.JSONDecodeError:
                 result = None
-        self.write_transcript(prompt, system, out, result, elapsed)
+        self.write_transcript(prompt, system, out, result, elapsed, used)
         if out.get("is_error") or not isinstance(result, dict):
             raise ClaudeError(f"CLI error: {out.get('subtype')} {str(out.get('result'))[:300]}")
         return result
 
-    def write_transcript(self, prompt: str, system: str | None, out: dict, result: Any, elapsed: float) -> None:
+    def write_transcript(self, prompt: str, system: str | None, out: dict, result: Any, elapsed: float,
+                         used: list[dict]) -> None:
         if not self.transcript_dir:
             return
         self.transcript_dir.mkdir(parents=True, exist_ok=True)
         record = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "seconds": round(elapsed, 1),
                   "cost_usd": out.get("total_cost_usd"), "system": system, "prompt": prompt,
-                  "response": result, "raw_result": None if result else out.get("result")}
+                  "response": result, "raw_result": None if result else out.get("result"),
+                  "tools": [f"{c['tool']} {c['detail']}".strip() for c in used]}
         with self._lock, open(self.transcript_dir / f"{self.session_id}.jsonl", "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
