@@ -386,3 +386,108 @@ def test_claude_is_not_restarted_after_ctrl_c():
     game.stopping.set()
     with pytest.raises(ClaudeError, match="stopping"):
         claude.call("prompt", schemas.RESPONSE_SCHEMA, None)
+
+
+def test_rules_clarifications(strategy_dir):
+    claude = Reflecting(1, [
+        {"review": "r", "update": False, "rules_add": ["x" * 400]},                 # пункт длиннее лимита — повтор
+        {"review": "r", "update": False, "rules_add": ["Гидра dies after any battle.", "Храм counts earlier summons."]},
+    ])
+    game = Game([claude, RandomBot(0)], factions=["nagas", "humans"])
+    assert "SPECIAL RULES OF THIS COMPUTER VERSION" in prompts.system_prompt(game, 0, VARIANT)
+    assert not (strategy_dir / "RULES_SPECIAL_ENG.md").exists() and len(notes.load_rules()) == len(notes.SEED_RULES)
+    game.run()
+    review, outcome = claude.reflect(game, 0)
+    assert "is 400 characters" in claude.prompts[-1][1] and "special rules added" in outcome
+    assert notes.load_rules() == [*notes.SEED_RULES, "Гидра dies after any battle.", "Храм counts earlier summons."]
+    system = prompts.system_prompt(game, 0, VARIANT)
+    assert "- Гидра dies after any battle." in system and "the engine decides" in system
+    assert "«Герои» (Hobby World) — rules reference" in system
+    claude.answers = [{"review": "r", "update": False, "rules_add": ["Храм counts earlier summons.", "New fact."]}]
+    claude.reflect(game, 0)
+    assert notes.load_rules()[-2:] == ["Храм counts earlier summons.", "New fact."]   # повтор не добавлен
+    assert len(notes.load_rules()) == len(notes.SEED_RULES) + 3
+    for bad in ("text", ["a"] * 6, [""]):
+        try:
+            notes.validate_rules_add({"rules_add": bad})
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+
+
+STREAM = "\n".join(json.dumps(e, ensure_ascii=False) for e in [
+    {"type": "system", "subtype": "init"},
+    {"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Bash", "input": {"command": "heroes-tool tree 2"}},
+        {"type": "tool_use", "name": "Read", "input": {"file_path": "/x/heroes/sim.py"}}]}},
+    {"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Bash", "input": {"command": "heroes-run -c 'print(1)'"}},
+        {"type": "tool_use", "name": "StructuredOutput", "input": {"answer": "Чарил"}}]}},
+    {"type": "result", "is_error": False, "session_id": "s", "total_cost_usd": 0.5,
+     "structured_output": {"answer": "Чарил", "comment": "c"}},
+])
+
+
+def test_tool_log_parse_and_report():
+    from heroes.protocol import tool_log
+    out, calls = tool_log.parse_stream(STREAM + "\nnot json")
+    assert out["structured_output"]["answer"] == "Чарил"
+    assert calls == [{"tool": "heroes-tool", "detail": "tree 2"}, {"tool": "Read", "detail": "/x/heroes/sim.py"},
+                     {"tool": "heroes-run", "detail": "-c 'print(1)'"}]
+    assert tool_log.parse_stream("garbage") == (None, [])
+    entries = [{"round": 3, "kind": "build_recruit", **c} for c in calls] + [
+        {"round": 5, "kind": "destination", "tool": "view_boards", "detail": "Ева"}]
+    text = tool_log.report("Лео", entries, 40, True)
+    assert "4 calls in 2 of 40 questions" in text and "round  3 · build_recruit: heroes-tool tree 2" in text
+    assert "round  5 · destination: view_boards Ева" in text and "by tool: heroes-tool 1, Read 1, heroes-run 1, view_boards 1" in text
+    assert "none in 40 calls" in tool_log.report("Лео", [], 40, True) and "none were available" in tool_log.report("Лео", [], 40, False)
+
+
+def test_call_records_tools(monkeypatch, tmp_path):
+    claude = ClaudePlayer(transcript_dir=tmp_path, workdir=tmp_path / "w", tools=False)
+    claude.binary = "claude"
+    seen = {}
+
+    def run(cmd, **kwargs):
+        seen["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, STREAM, "")
+    monkeypatch.setattr(subprocess, "run", run)
+    claude.where = (4, "destination")
+    result = claude.call("question", schemas.RESPONSE_SCHEMA, "system")
+    assert result == {"answer": "Чарил", "comment": "c"} and "stream-json" in seen["cmd"] and "--verbose" in seen["cmd"]
+    assert [(e["round"], e["kind"], e["tool"]) for e in claude.tool_log] == [(4, "destination", "heroes-tool"),
+                                                                           (4, "destination", "Read"), (4, "destination", "heroes-run")]
+    record = json.loads((tmp_path / f"{claude.session_id}.jsonl").read_text(encoding="utf-8"))
+    assert record["tools"][0] == "heroes-tool tree 2"
+    game = Game([claude, RandomBot(0)], factions=["orcs", "humans"])
+    assert "3 calls in 1 of 1 questions" not in claude.tools_report(game, 0)   # инструменты выключены (tools=False)
+    claude.tools = True
+    assert "3 calls in 1 of 1 questions" in claude.tools_report(game, 0)
+    assert (tmp_path / f"{claude.session_id}.tools.txt").exists()
+
+
+def test_tools_missing_and_report_before_review(strategy_dir):
+    claude = Reflecting(1, [
+        {"review": "r", "update": False, "tools_missing": ["x" * 400]},                       # длиннее лимита — повтор
+        {"review": "r", "update": False, "tools_missing": ["distance to every fortress for N MP", "price of next build"]},
+    ])
+    claude.tools = True
+    claude.tool_log.append({"round": 2, "kind": "destination", "tool": "heroes-tool", "detail": "reach 3"})
+    game = Game([claude, RandomBot(0)], factions=["orcs", "humans"])
+    game.run()
+    lines = []
+    cli.record_lessons(game, out=lines.append, on_thought=lambda *a: None)
+    asked = next(prompt for _, prompt in claude.prompts if "QUESTION (strategy_notes)" in prompt)
+    assert "TOOL USAGE IN THIS GAME" in asked and "heroes-tool reach 3" in asked and "tools_missing" in asked
+    assert "is 400 characters" in claude.prompts[-1][1]
+    assert any("heroes-tool reach 3" in line for line in lines)
+    first_report = next(i for i, line in enumerate(lines) if "Tools used by" in line)
+    assert first_report < next(i for i, line in enumerate(lines) if "tools missing:" in line)   # статистика — до разбора
+    wanted = (strategy_dir / "TOOLS_WANTED.md").read_text(encoding="utf-8")
+    assert "- price of next build" in wanted and "- distance to every fortress for N MP" in wanted
+    for bad in ("text", ["a"] * 6, [""]):
+        try:
+            notes.validate_tools_missing({"tools_missing": bad})
+        except ValueError:
+            continue
+        raise AssertionError(bad)

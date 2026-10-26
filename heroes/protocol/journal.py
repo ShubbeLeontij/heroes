@@ -4,6 +4,7 @@
 - git: каждое изменение заметок и скриптов Claude — коммит с объяснением от самого Claude;
   перед тем как править заметки, Claude видит последние изменения своего файла (history).
 - results.csv — по строке на каждого Claude-игрока в каждой партии: как растёт результат варианта.
+- TOOLS_WANTED.md — для разработчика: каких инструментов не хватило Claude (его tools_missing).
 - RULES_CONFUSION.md — для человека: где Claude путался в правилах (отклонённые движком ответы,
   ответы не по формату, его собственные вопросы о правилах).
 """
@@ -65,14 +66,14 @@ def ensure_repo() -> bool:
 
 
 def history(variant: str, faction: str) -> str:
-    """Последние изменения файла заметок (с диффами) и папки скриптов варианта."""
+    """Последние изменения файла заметок (с диффами) и общей папки скриптов."""
     if not ensure_repo():
         return "(git is not installed — no history)"
     notes_file = f"{variant}/{faction}.md"
     log = git("log", f"-{HISTORY_COMMITS}", "-p", "--format=--- %ad · %s%n%b", "--date=format:%Y-%m-%d %H:%M",
               "--", notes_file, check=False).stdout.strip()
     scripts = git("log", f"-{HISTORY_COMMITS}", "--stat", "--format=--- %ad · %s", "--date=format:%Y-%m-%d %H:%M",
-                  "--", f"{variant}/scripts", check=False).stdout.strip()
+                  "--", "scripts", check=False).stdout.strip()
     return "\n\n".join([
         f"Last {HISTORY_COMMITS} changes of your notes file {notes_file}:\n" + (log or "(none yet)"),
         f"Last {HISTORY_COMMITS} changes of your scripts:\n" + (scripts or "(none yet)"),
@@ -113,6 +114,24 @@ def record_result(row: dict) -> Path:
 
 def confusion_path() -> Path:
     return root() / "RULES_CONFUSION.md"
+
+
+def tools_wanted_path() -> Path:
+    return root() / "TOOLS_WANTED.md"
+
+
+def log_tools_wanted(where: str, items: list[str]) -> None:
+    """Запись для разработчика: каких инструментов не хватило Claude (после разбора партии)."""
+    target = tools_wanted_path()
+    with _lock:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        new = not target.exists()
+        with open(target, "a", encoding="utf-8") as f:
+            if new:
+                f.write("# Каких инструментов не хватило Claude-игрокам\n\n"
+                        "Список для разработчика: Claude называет их после партии (поле tools_missing). "
+                        "Claude этот файл не видит.\n\n")
+            f.write(f"## {time.strftime('%Y-%m-%d %H:%M')} · {where}\n" + "".join(f"- {i}\n" for i in items) + "\n")
 
 
 def log_confusion(source: str, where: str, details: dict[str, str]) -> None:

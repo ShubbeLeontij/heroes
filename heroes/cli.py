@@ -381,6 +381,8 @@ def record_lessons(game: Game, out: Callable[[str], None] = print,
             journal.record_result(player.result_row(game, p))
         except OSError as e:
             out(f"Could not record the result in {journal.root() / 'results.csv'}: {e}")
+    for p, player in claudes:
+        out(player.tools_report(game, p))    # сначала — что Claude запускал за партию, потом — разбор
     out("Claude players are reviewing the game for their strategy notes…")
     workers = [Background(lambda p=p, player=player: player.reflect(game, p), f"reflect-{p}") for p, player in claudes]
     try:
@@ -395,6 +397,8 @@ def record_lessons(game: Game, out: Callable[[str], None] = print,
             if review:
                 on_thought(name, "game_review", review)
             out(f"{name}: {outcome}")
+            if game.players[p].reported < len(game.players[p].tool_log):
+                out(game.players[p].tools_report(game, p, review=True))
 
 
 def setup_wizard(args: argparse.Namespace, input_fn: Callable[[str], str] = input,
