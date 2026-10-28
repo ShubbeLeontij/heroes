@@ -23,6 +23,8 @@ from ..protocol import notes
 
 ROOT = DATA_DIR.parent
 TOOLS = "Read,Write,Edit,Glob,Grep,Bash"
+REFERENCE = ("board", "max_strength", "schedule", "tree", "reach", "artifacts", "fortresses", "monsters", "scores",
+             "stockpile")   # справки heroes-tool (heroes/agent_tools.py) — для подсказки в вопросе
 READ_DIRS = [ROOT / "heroes", ROOT / "data", ROOT / "docs"]
 SKIP = {"__pycache__"}
 
@@ -83,8 +85,8 @@ class Workspace:
     def prompt_text(self) -> str:
         """Раздел системного промпта об инструментах."""
         return (
-            "TOOLS. You have tools: Read, Glob, Grep, Write, Edit and Bash (only the heroes-run and heroes-tool commands). Each decision "
-            "has a time limit, so use them where it matters — key decisions and the start of the game — not on every question.\n"
+            "TOOLS. You have tools: Read, Glob, Grep, Write, Edit and Bash (only the heroes-run and heroes-tool commands). Use them "
+            "where they help — above all on key decisions and at the start of the game.\n"
             f"- Your workspace (the current directory) is your scripts folder: Python helper scripts that you write, keep "
             "and reuse in later games with any faction. Only this folder is writable. Keep its README.md up to date: "
             "what each script does and how to call it — your future self reads it first. Prefer improving a few "
@@ -92,7 +94,9 @@ class Workspace:
             "- Run Python: `heroes-run <script.py> [args]` or `heroes-run -c '<code>'`. It runs isolated: standard "
             "library only, no network, 120 s limit.\n"
             "- Quick reference tools (nothing is spent, they read the game as it is at your current question): "
-            "`heroes-tool max_strength [player]` (army strength now and with hiring), `schedule` (rounds in which you choose "
+            "`heroes-tool board [player]` (any player's full board by the openness rule: buildings with costs and "
+            "effects, artifacts, hire costs, monster line, movement costs, stockpile marks — the questions only carry "
+            "a summary of the opponents), `max_strength [player]` (army strength now and with hiring), `schedule` (rounds in which you choose "
             "the action order), `tree [player]` (the whole building tree: requirements, what a building opens, status), "
             "`reach <MP>` (regions you can get to), `artifacts [player]`, `fortresses`, `monsters [player]`, `scores` "
             "(VP of everybody now), `stockpile [player]` (distance to the next resource VP). A player is a number or a name.\n"
@@ -104,6 +108,11 @@ class Workspace:
             f"{', '.join(str(d) for d in READ_DIRS)}. If the engine and your reading of the rules disagree, the engine "
             "decides — and report it in rules_unclear."
         )
+
+    def hint(self) -> str:
+        """Короткое напоминание об инструментах — в конце каждого вопроса."""
+        return (f"TOOLS, if they help with this decision: heroes-tool {'|'.join(REFERENCE)} [player or argument]; "
+                "your scripts and simulation: heroes-run <script.py>.")
 
     def cli_args(self) -> list[str]:
         return ["--restricted", "--tools", TOOLS, "--permission-mode", "dontAsk",

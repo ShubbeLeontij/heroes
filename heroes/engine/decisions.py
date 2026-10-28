@@ -28,6 +28,8 @@ class Decision:
     # Проверка записанного ответа при загрузке сохранения, если она мягче validate: правила, которые движок
     # ввёл позже (запрет заведомо проигрышного штурма), не должны ломать старые сохранения. None — validate.
     recorded: Validator | None = None
+    # Почему у решения без выбора (forced) нет выбора — игроку сообщают, что вопрос пропущен и почему.
+    reason: str = ""
 
     def check_recorded(self, answer: Any) -> str | None:
         return (self.recorded or self.validate)(answer)

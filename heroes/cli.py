@@ -32,7 +32,7 @@ from .engine.game import Background, Game
 from .net.protocol import DEFAULT_PORT
 from .net.server import Server, local_addresses
 from .players.base import Player
-from .players.claude_cli import DEFAULT_MODEL, ClaudePlayer
+from .players.claude_cli import DEFAULT_EFFORT, DEFAULT_MODEL, ClaudePlayer
 from .players.random_bot import RandomBot
 from .players.remote import RemotePlayer, Spectators
 from .protocol import journal
@@ -133,7 +133,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("--load", metavar="FILE", help="continue a saved game")
     ap.add_argument("--continue", dest="resume", action="store_true", help="continue the most recent saved game")
     ap.add_argument("--model", help=f"model for Claude players (default {DEFAULT_MODEL})")
-    ap.add_argument("--effort", choices=EFFORTS, help="Claude's thinking effort (default: the model's default)")
+    ap.add_argument("--effort", choices=EFFORTS, help=f"Claude's thinking effort (default: {DEFAULT_EFFORT})")
     ap.add_argument("--tools", action=argparse.BooleanOptionalAction, default=None,
                     help="give Claude tools: its own scripts and game simulation in a bwrap sandbox "
                          "(default: when bwrap is installed, i.e. on Linux)")
@@ -207,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("Claude players need the Claude Code CLI (`claude`) installed and logged in")
         meta = {"players": kinds, "seed": args.seed}
         if "claude" in kinds:
-            meta["claude"] = {"model": model, "effort": args.effort, "tools": args.tools}
+            meta["claude"] = {"model": model, "effort": args.effort or DEFAULT_EFFORT, "tools": args.tools}
         game = Game(make_players(meta, names, args.show_thoughts, network), names=names, factions=factions,
                     first_player=first, meta=meta, autosave=autosave)
     for seat, profile_id in profiles.seat_profiles(game.meta, [p.name for p in game.state.players]).items():
@@ -218,6 +218,7 @@ def main(argv: list[str] | None = None) -> int:
         if server and not open_table(game, server, args):
             return 0
         game.listeners.append(lambda message: None if game.replaying else print(message))
+        report_claude_setup(game)
         ended = threading.Event()
         commands = None
         if sys.stdin.isatty():
@@ -361,11 +362,22 @@ def record_profiles(game: Game, out: Callable[[str], None] = print) -> None:
         out("Recorded in the profile statistics: " + ", ".join(names))
 
 
+def report_claude_setup(game: Game, out: Callable[[str], None] = print) -> None:
+    """В начале партии: модель, усилия и инструменты каждого Claude-игрока."""
+    for p, player in enumerate(game.players):
+        if isinstance(player, ClaudePlayer):
+            out(f"{game.state.players[p].name}: Claude {player.model}, effort {player.effort or 'default'}, "
+                f"{player.tools_status()}")
+
+
 def report_claude_usage(game: Game, out: Callable[[str], None] = print) -> None:
     for p, player in enumerate(game.players):
         if isinstance(player, ClaudePlayer) and player.calls:
-            out(f"{game.state.players[p].name}: {player.calls} Claude calls, ≈ ${player.cost_usd:.2f} "
-                f"(transcript: logs/claude/{player.session_id}.jsonl)")
+            t = player.tokens
+            out(f"{game.state.players[p].name}: {player.calls} Claude calls, ≈ ${player.cost_usd:.2f}, "
+                f"tokens: {t['input']:,} in, {t['output']:,} out (thinking {t['thinking']:,}; "
+                f"≈ {t['output'] // player.calls:,} out per call)\n  transcript: logs/claude/{player.session_id}.jsonl, "
+                f"story of the game: logs/claude/{player.session_id}.story.md")
 
 
 def record_lessons(game: Game, out: Callable[[str], None] = print,
@@ -462,10 +474,9 @@ def setup_wizard(args: argparse.Namespace, input_fn: Callable[[str], str] = inpu
             output_fn("Claude model: " + "; ".join(f"{i} — {MODELS[m]}" for i, m in enumerate(models, 1)))
             model = models[ask("Which model?", models, 1) - 1]
         if not args.effort:
-            efforts = ["default", *EFFORTS]
-            choice = ask("Claude's effort: " + ", ".join(f"{i} — {e}" for i, e in enumerate(efforts, 1)) + "?",
-                         efforts, 1)
-            args.effort = None if choice == 1 else efforts[choice - 1]
+            choice = ask("Claude's effort: " + ", ".join(f"{i} — {e}" for i, e in enumerate(EFFORTS, 1)) + "?",
+                         list(EFFORTS), EFFORTS.index(DEFAULT_EFFORT) + 1)
+            args.effort = EFFORTS[choice - 1]
         if args.show_thoughts is None and "human" in kinds:
             args.show_thoughts = yes("Print Claude's plans in this terminal (a hint if you play against it)?", False)
     if "human" in kinds:

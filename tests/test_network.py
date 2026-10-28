@@ -100,7 +100,7 @@ def test_wizard_asks_everything_the_new_game_window_did(monkeypatch, tmp_path):
                     "2", "", "",          # Claude, имя по умолчанию, случайная фракция
                     "3", "аня", "Бот", "4", "",   # бот: занятое имя (без учёта регистра), занятая фракция
                     "3",                  # модель — Haiku
-                    "4",                  # effort — high
+                    "3",                  # effort — high
                     "y",                  # замыслы Claude — печатать
                     "7000", "сова",       # порт и пароль
                     "2",                  # первым ходит Claude 1

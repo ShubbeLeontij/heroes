@@ -30,16 +30,17 @@ def rules_text() -> str:
 
 
 PROTOCOL = """\
-HOW TO ANSWER. The game engine sends you questions one at a time. Answer strictly with JSON matching the given schema:
-"answer" — your decision, "comment" — 1–2 sentences in English about your plan (opponents do not see it).
+HOW TO ANSWER. The game engine sends you questions one at a time. Reply in two parts, in English:
+1) First, as plain text, your analysis: the current situation, the alternatives you considered and why you choose
+this one, and your plan for the next rounds. Opponents do not see it; it is kept as the story of your game.
+2) Then your decision as one JSON object matching the given schema: "answer".
 If an answer is rejected, you will get an error message — answer the same question again.
 Optional "rules_unclear": if a rule is unclear to you, seems contradictory, or the engine does not behave as you read
 the rules, describe it there in 1–3 sentences (a human reads these reports to improve the rules text). Omit it otherwise.
-Optional "view_boards": by the openness rule you may look at any player's full board (buildings with costs and effects,
-artifacts, hire costs, monster line, movement costs, stockpile marks) — the questions only carry a summary of the
-opponents. List player numbers or names there (e.g. [1, 2]); you then get those boards and the same question again,
-and the "answer" and "comment" of that reply are ignored (put any placeholder). Use it when the details matter.
 Play to win: count VP, resources and strength, plan several rounds ahead, watch your opponents."""
+
+MATTERS = ("EVERY DECISION MATTERS: this one affects the outcome of the game. Think it through before you answer: "
+           "what it gives you now and in the coming rounds, and what the alternatives would give.")
 
 # Решения, перед которыми Claude получает полную картину: планшет, соперников, состояние карты.
 MAJOR = {"choose_start", "action_order", "build_recruit", "destination", "region_stance", "commit_army",
@@ -109,8 +110,17 @@ def map_text(game: Game) -> str:
     return "\n".join(lines)
 
 
-def system_prompt(game: Game, p: int, variant: str, tools: str | None = None) -> str:
-    """variant — вариант Claude (папка заметок); tools — раздел об инструментах, если они есть."""
+def time_text(seconds: float) -> str:
+    return (f"TIME. Each answer has a hard limit of about {round(seconds / 60)} minutes, thinking and tool calls included; "
+            "past it the answer is lost and the question is asked again. Use that time: on key decisions (the start, "
+            "action order, building and hiring, moves, battles, rewards) think deeply for several minutes — compare "
+            "alternatives, count VP, resources and strength over the next rounds, check your numbers"
+            " — and answer minor questions quickly.")
+
+
+def system_prompt(game: Game, p: int, variant: str, tools: str | None = None, time_limit: float | None = None) -> str:
+    """variant — вариант Claude (папка заметок); tools — раздел об инструментах, если они есть;
+    time_limit — лимит времени на один ответ, с."""
     st = game.state
     me = st.players[p]
     others = ", ".join(f"{pl.name} ({game.faction_of(q).name})" for q, pl in enumerate(st.players) if q != p)
@@ -120,7 +130,8 @@ def system_prompt(game: Game, p: int, variant: str, tools: str | None = None) ->
         f"Your name in this game is {me.name}, your player number is {p}. Opponents: {others}. "
         f"Seating, clockwise: {seating}.",
         rules_text(), notes.rules_prompt_text(), faction_text(game, p), opponent_factions_text(game, p), map_text(game),
-        notes.prompt_text(variant, game.state.players[p].faction), *([tools] if tools else []), PROTOCOL,
+        notes.prompt_text(variant, game.state.players[p].faction), *([tools] if tools else []),
+        *([time_text(time_limit)] if time_limit else []), PROTOCOL,
     ])
 
 
@@ -148,13 +159,14 @@ def map_state(game: Game, p: int) -> str:
 
 
 def question(game: Game, p: int, d: Decision, spec: Spec, events: list[str], error: str | None,
-             variant: str) -> str:
-    return questions(game, p, [d], spec, events, error, variant)
+             variant: str, tools_hint: str | None = None) -> str:
+    return questions(game, p, [d], spec, events, error, variant, tools_hint)
 
 
 def questions(game: Game, p: int, ds: list[Decision], spec: Spec, events: list[str], error: str | None,
-              variant: str) -> str:
-    """Один вопрос или несколько тайных сразу (перемещение и гидра): тогда spec — составной, answer.<вид решения>."""
+              variant: str, tools_hint: str | None = None) -> str:
+    """Один вопрос или несколько тайных сразу (перемещение и гидра): тогда spec — составной, answer.<вид решения>.
+    tools_hint — короткое напоминание об инструментах в конце вопроса, если они есть."""
     parts = []
     if error:
         parts.append(f"YOUR PREVIOUS ANSWER WAS REJECTED: {error}\nAnswer the same question again.")
@@ -173,8 +185,11 @@ def questions(game: Game, p: int, ds: list[Decision], spec: Spec, events: list[s
     if len(ds) > 1:
         parts.append(f"{len(ds)} SECRET QUESTIONS AT ONCE — answer all of them in this one reply.")
     parts += [f"QUESTION ({d.kind}, round {game.state.round}/{ROUNDS}):\n{d.text}" for d in ds]
-    parts.append(f"FORMAT: {spec.instructions.rstrip('.')}. Plus comment — your plan in 1–2 sentences.\n"
+    parts.append(MATTERS)
+    parts.append(f"FORMAT: first your analysis as text, then the JSON: {spec.instructions.rstrip('.')}.\n"
                  f"JSON schema of the answer field: {json.dumps(spec.schema, ensure_ascii=False)}")
+    if tools_hint:
+        parts.append(tools_hint)
     return "\n\n".join(parts)
 
 
@@ -194,8 +209,8 @@ def game_plan(game: Game, p: int, opponents: dict[str, str], tools: bool) -> str
         "You will keep this plan in mind for the rest of the game and adapt it as the game goes."
         + (" This is a good moment to use your tools: read your scripts' README, check numbers with scripts or "
            "simulations." if tools else ""),
-        "FORMAT: answer — your plan as a string, terse bullet points, at most about 1500 characters. "
-        "Plus comment — the plan in one sentence.",
+        "FORMAT: answer — your plan as a string, terse bullet points, at most about 1500 characters. No separate "
+        "analysis text is needed here: the plan is your answer.",
     ])
 
 
@@ -253,11 +268,12 @@ def reflection(game: Game, p: int, variant: str, opponents: dict[str, str], allo
            "workspace (they run with heroes-run on a copy of the game, see heroes/sim.py and heroes/agent_tools.py for "
            "the ready-made ones) and describe them in README.md; improve the old scripts too. They are saved for your "
            "future games." if tools else ""),
-        'FORMAT: answer — {"review": "<your review>", "update": false} or {"review": "<your review>", "update": true, '
-        '"sections": {"<section key>": "<new full text of the section>", ...}}. '
+        'FORMAT (no separate analysis text is needed, put everything in the JSON): answer — {"review": "<your review>", '
+        '"update": false, "summary": "..."} or {"review": "<your review>", "update": true, '
+        '"sections": {"<section key>": "<new full text of the section>", ...}, "summary": "..."}. '
         "Optionally \"rules_add\": [\"<new rules clarification>\", ...] next to \"update\"; and always "
-        "\"tools_missing\": [\"<tool>\", ...] (empty if none). "
-        "Plus comment — what you changed in the notes and why, in 1–2 sentences (it becomes the git commit message). "
+        "\"tools_missing\": [\"<tool>\", ...] (empty if none) and \"summary\" — what you changed in the notes and "
+        "scripts and why, in 1–2 sentences (it becomes the git commit message). "
         "Plus rules_unclear — every rule you were unsure about or misunderstood during the game, if any.",
     ]
     return "\n\n".join(parts)

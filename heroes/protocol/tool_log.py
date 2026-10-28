@@ -37,10 +37,11 @@ def describe(name: str, args: dict) -> str:
     return short(json.dumps(args, ensure_ascii=False))
 
 
-def parse_stream(stdout: str) -> tuple[dict | None, list[dict]]:
+def parse_stream(stdout: str) -> tuple[dict | None, list[dict], str]:
     """Вывод claude -p --output-format stream-json → (итоговая запись result, вызовы инструментов
-    [{tool, detail}]). Итога нет (None) — вывод оборван или это не stream-json."""
-    result, calls = None, []
+    [{tool, detail}], текст ответа — анализ, который Claude пишет перед JSON). Итога нет (None) — вывод
+    оборван или это не stream-json."""
+    result, calls, texts = None, [], []
     for line in stdout.splitlines():
         try:
             event = json.loads(line)
@@ -51,19 +52,23 @@ def parse_stream(stdout: str) -> tuple[dict | None, list[dict]]:
         if event.get("type") == "assistant":
             content = (event.get("message") or {}).get("content")
             for block in content if isinstance(content, list) else []:
-                if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") not in SERVICE:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_use" and block.get("name") not in SERVICE:
                     args = block.get("input") if isinstance(block.get("input"), dict) else {}
                     calls.append({"tool": tool_name(block["name"], args), "detail": describe(block["name"], args)})
+                elif block.get("type") == "text" and str(block.get("text") or "").strip():
+                    texts.append(str(block["text"]).strip())
         elif event.get("type") == "result":
             result = event
-    return result, calls
+    return result, calls, "\n\n".join(texts)
 
 
 def report(who: str, entries: list[dict], questions: int, tools: bool) -> str:
     """Отчёт: по вопросам (раунд · вид решения) — инструменты и аргументы, итог по инструментам.
     entries — [{round, kind, tool, detail}]; questions — сколько вызовов Claude было всего."""
     if not tools:
-        return f"Tools used by {who}: none were available (no bwrap or --no-tools); only view_boards could be used."
+        return f"Tools used by {who}: none were available (no bwrap or --no-tools)."
     if not entries:
         return f"Tools used by {who}: none in {questions} calls (tools were available)."
     lines = [f"Tools used by {who}: {len(entries)} calls in {len({(e['round'], e['kind']) for e in entries})} "

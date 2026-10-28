@@ -3,6 +3,8 @@ import json
 import random
 import shutil
 import subprocess
+from types import SimpleNamespace
+from pathlib import Path
 
 import pytest
 
@@ -10,6 +12,7 @@ from heroes import cli
 from heroes.engine.game import Game
 from heroes.players.claude_cli import ClaudeError, ClaudePlayer
 from heroes.players.random_bot import RandomBot
+from heroes.players.workspace import REFERENCE, Workspace
 from heroes.protocol import journal, notes, prompts, schemas
 
 from schema_fuzz import random_instance
@@ -43,8 +46,8 @@ class FakeClaude(ClaudePlayer):
         self.prompts.append((system is not None, prompt))
         self.started = True
         if SCHEMA_LINE in prompt:
-            self.schema = json.loads(prompt.rsplit(SCHEMA_LINE, 1)[1])
-        return {"answer": random_instance(self.schema, self.rng), "comment": "plan"}
+            self.schema = json.loads(prompt.rsplit(SCHEMA_LINE, 1)[1].split("\n", 1)[0])
+        return {"answer": random_instance(self.schema, self.rng), "analysis": "plan"}
 
 
 def test_fake_claude_plays_full_game():
@@ -71,35 +74,30 @@ def test_fake_nagas_and_elves_answer_jointly():
     assert ["destination", "hydra_destination"] in nagas.together
 
 
-class Peeking(FakeClaude):
-    """На каждый вопрос сначала просит планшеты всех игроков (по номеру и по имени), затем снова и снова."""
+class WithTools(FakeClaude):
+    """FakeClaude с рабочей папкой: проверяет подсказку об инструментах, саму папку не готовит."""
 
-    def call(self, prompt, schema, system):
-        result = super().call(prompt, schema, system)
-        if "Now answer the same question" in prompt:
-            self.viewed.append(prompt)
-        return {**result, "view_boards": [0, "Боб", True, 7, "?"]}
+    def __init__(self, seed, workdir):
+        super().__init__(seed)
+        self.tools, self.workspace = True, Workspace(self.variant, self.session_id, workdir)
+
+    def ask(self, game, p, kind, prompt):
+        return self.call(prompt, schemas.RESPONSE_SCHEMA, None if self.started else self.system_prompt(game, p))
 
 
-def test_view_boards():
-    claude = Peeking(3)
-    claude.viewed = []
-    game = Game([claude, RandomBot(0)], names=["Ада", "Боб"])
+def test_tools_hint_in_questions(tmp_path):
+    from heroes import agent_tools
+    assert REFERENCE == tuple(agent_tools.TOOLS)
+    assert "view_boards" not in schemas.RESPONSE_SCHEMA["properties"] and "view_boards" not in prompts.PROTOCOL
+    on, off = WithTools(5, tmp_path), FakeClaude(6)
+    game = Game([on, off, RandomBot(0)], names=["Ада", "Боб", "Вера"])
     game.run()
     assert game.state.round == 16
-    assert claude.viewed and all(prompt.count("BOARD:") == 2 for prompt in claude.viewed)   # оба, по разу за решение
-    shown = claude.viewed[-1]
-    assert "BOARD: Боб" in shown and ", player 1" in shown and "QUESTION" not in shown
-    # на просьбу — ровно один повтор вопроса, и ответ после него засчитывается (партия доиграна без умолчаний)
-    asked = [prompt for _, prompt in claude.prompts if "QUESTION (" in prompt and "game_plan" not in prompt]
-    assert len(claude.viewed) == len(asked)
-    assert not any("did not answer" in line for line in game.state.log)
-
-
-def test_requested_boards():
-    game = Game([RandomBot(0), RandomBot(1), RandomBot(2)], names=["Ада", "Боб", "Вера"])
-    assert ClaudePlayer.requested_boards(game, [2, " боб ", "0", 2, False, -1, 3, None]) == [2, 1, 0]
-    assert ClaudePlayer.requested_boards(game, "Боб") == []
+    asked = {c: [prompt for _, prompt in c.prompts if "QUESTION (" in prompt and "game_plan" not in prompt] for c in (on, off)}
+    assert asked[on] and all(q.endswith("[player or argument]; your scripts and simulation: heroes-run <script.py>.")
+                             for q in asked[on])
+    assert asked[off] and not any("heroes-tool" in q for q in asked[off])
+    assert "`heroes-tool board [player]`" in on.system_prompt(game, 0)   # системный промпт: раздел TOOLS
 
 
 class SchemaProbe(RandomBot):
@@ -176,11 +174,12 @@ class Reflecting(FakeClaude):
     def call(self, prompt, schema, system):
         if "QUESTION (strategy_notes)" in prompt or "YOUR ANSWER WAS REJECTED" in prompt:
             self.prompts.append((system is not None, prompt))
-            return {"answer": self.answers.pop(0), "comment": "lessons"}
+            answer = self.answers.pop(0)
+            return {"answer": {"summary": "lessons", **answer} if isinstance(answer, dict) else answer, "analysis": ""}
         return super().call(prompt, schema, system)
 
 
-VARIANT = notes.variant("claude-opus-5-5", None)
+VARIANT = notes.variant("claude-opus-5-5", "max")
 
 
 def test_strategy_notes_round_trip(strategy_dir):
@@ -190,7 +189,7 @@ def test_strategy_notes_round_trip(strategy_dir):
         {"review": "- lost the race for Юноро", "update": True,
          "sections": {"general": "- rush monsters", "humans": "- block portals"}},
     ])
-    assert claude.variant == "claude-opus-5-5/default"
+    assert claude.variant == "claude-opus-5-5/max"
     game = Game([claude, FakeClaude(2)], factions=["orcs", "humans"])
     assert "none yet" in prompts.system_prompt(game, 0, VARIANT)
     game.run()
@@ -208,6 +207,27 @@ def test_strategy_notes_round_trip(strategy_dir):
     assert notes.load(VARIANT, "orcs") == saved
     history = claude.prompts[-1][1]
     assert "Орки: lessons" in history and "+- block portals" in history   # прошлый коммит с диффом
+
+
+def test_analysis_goes_to_the_story(strategy_dir, tmp_path):
+    assert "comment" not in schemas.RESPONSE_SCHEMA["properties"] and "comment" not in prompts.PROTOCOL
+    claude = Reflecting(1, [{"review": "- lost the race", "update": True, "sections": {"general": "- x"}}])
+    claude.story_file = tmp_path / "story.md"
+    thoughts = []
+    claude.on_comment = lambda name, kind, text: thoughts.append(text)
+    game = Game([claude, RandomBot(0)], names=["Лео", "Ева"], factions=["orcs", "humans"])
+    game.run()
+    asked = [prompt for _, prompt in claude.prompts if "QUESTION (" in prompt and "game_plan" not in prompt]
+    assert asked and all(prompts.MATTERS in q and "FORMAT: first your analysis as text, then the JSON" in q for q in asked)
+    claude.on_invalid(SimpleNamespace(player=0, kind="destination", text="q"), "Улин", "too far")
+    claude.reflect(game, 0)
+    story = claude.story_file.read_text(encoding="utf-8")
+    assert story.startswith("# Лео (Орки): the story of the game") and "## Plan for the game" in story
+    assert "## Round 1 · " in story and "plan\n\n**Decision:** `" in story and "## Round 16 · " in story
+    assert "*The engine rejected this answer: too far*" in story
+    assert story.rstrip().endswith("## Review after the game\n\n- lost the race")
+    assert thoughts and set(thoughts[1:]) == {"plan"}                    # зрителю — тот же анализ
+    assert "Орки: lessons" in journal.git("log", "-1", "--format=%s").stdout   # summary — сообщение коммита
 
 
 def test_strategy_notes_skip_random_bot_sections(strategy_dir):
@@ -272,7 +292,7 @@ def test_rules_confusion_log(strategy_dir):
     log = (strategy_dir / "RULES_CONFUSION.md").read_text(encoding="utf-8")
     assert "answer rejected by the engine" in log and "**Engine:**" in log
     assert "question from Claude" in log and "crossed-out portal region" in log
-    assert "claude-opus-5-5/default · Player 1 (Орки)" in log
+    assert "claude-opus-5-5/max · Player 1 (Орки)" in log
 
 
 def test_strategy_branch_worktree(tmp_path, strategy_dir):
@@ -305,7 +325,7 @@ class Answering(ClaudePlayer):
         answer = self.answer(prompt)
         if answer is None:
             raise ClaudeError("no answer in this test")
-        return {"answer": answer, "comment": "c"}
+        return {"answer": answer, "analysis": "c"}
 
 
 def hydra_game(hydra_answer):
@@ -418,28 +438,33 @@ def test_rules_clarifications(strategy_dir):
 STREAM = "\n".join(json.dumps(e, ensure_ascii=False) for e in [
     {"type": "system", "subtype": "init"},
     {"type": "assistant", "message": {"content": [
+        {"type": "text", "text": "Чарил is two moves away."},
         {"type": "tool_use", "name": "Bash", "input": {"command": "heroes-tool tree 2"}},
         {"type": "tool_use", "name": "Read", "input": {"file_path": "/x/heroes/sim.py"}}]}},
     {"type": "assistant", "message": {"content": [
         {"type": "tool_use", "name": "Bash", "input": {"command": "heroes-run -c 'print(1)'"}},
+        {"type": "text", "text": "  So I go there now.  "},
         {"type": "tool_use", "name": "StructuredOutput", "input": {"answer": "Чарил"}}]}},
     {"type": "result", "is_error": False, "session_id": "s", "total_cost_usd": 0.5,
-     "structured_output": {"answer": "Чарил", "comment": "c"}},
+     "usage": {"input_tokens": 2, "cache_creation_input_tokens": 300, "cache_read_input_tokens": 700, "output_tokens": 900,
+               "output_tokens_details": {"thinking_tokens": 800}},
+     "structured_output": {"answer": "Чарил"}},
 ])
 
 
 def test_tool_log_parse_and_report():
     from heroes.protocol import tool_log
-    out, calls = tool_log.parse_stream(STREAM + "\nnot json")
+    out, calls, text = tool_log.parse_stream(STREAM + "\nnot json")
+    assert text == "Чарил is two moves away.\n\nSo I go there now."
     assert out["structured_output"]["answer"] == "Чарил"
     assert calls == [{"tool": "heroes-tool", "detail": "tree 2"}, {"tool": "Read", "detail": "/x/heroes/sim.py"},
                      {"tool": "heroes-run", "detail": "-c 'print(1)'"}]
-    assert tool_log.parse_stream("garbage") == (None, [])
+    assert tool_log.parse_stream("garbage") == (None, [], "")
     entries = [{"round": 3, "kind": "build_recruit", **c} for c in calls] + [
-        {"round": 5, "kind": "destination", "tool": "view_boards", "detail": "Ева"}]
+        {"round": 5, "kind": "destination", "tool": "heroes-tool", "detail": "board Ева"}]
     text = tool_log.report("Лео", entries, 40, True)
     assert "4 calls in 2 of 40 questions" in text and "round  3 · build_recruit: heroes-tool tree 2" in text
-    assert "round  5 · destination: view_boards Ева" in text and "by tool: heroes-tool 1, Read 1, heroes-run 1, view_boards 1" in text
+    assert "round  5 · destination: heroes-tool board Ева" in text and "by tool: heroes-tool 2, Read 1, heroes-run 1" in text
     assert "none in 40 calls" in tool_log.report("Лео", [], 40, True) and "none were available" in tool_log.report("Лео", [], 40, False)
 
 
@@ -454,16 +479,86 @@ def test_call_records_tools(monkeypatch, tmp_path):
     monkeypatch.setattr(subprocess, "run", run)
     claude.where = (4, "destination")
     result = claude.call("question", schemas.RESPONSE_SCHEMA, "system")
-    assert result == {"answer": "Чарил", "comment": "c"} and "stream-json" in seen["cmd"] and "--verbose" in seen["cmd"]
+    assert result == {"answer": "Чарил", "analysis": "Чарил is two moves away.\n\nSo I go there now."} and "stream-json" in seen["cmd"] and "--verbose" in seen["cmd"]
     assert [(e["round"], e["kind"], e["tool"]) for e in claude.tool_log] == [(4, "destination", "heroes-tool"),
                                                                            (4, "destination", "Read"), (4, "destination", "heroes-run")]
     record = json.loads((tmp_path / f"{claude.session_id}.jsonl").read_text(encoding="utf-8"))
-    assert record["tools"][0] == "heroes-tool tree 2"
+    assert record["tools"][0] == "heroes-tool tree 2" and record["tools_enabled"] is False
+    assert record["tokens"] == {"input": 1002, "output": 900, "thinking": 800} and record["analysis"].startswith("Чарил is")
     game = Game([claude, RandomBot(0)], factions=["orcs", "humans"])
     assert "3 calls in 1 of 1 questions" not in claude.tools_report(game, 0)   # инструменты выключены (tools=False)
     claude.tools = True
     assert "3 calls in 1 of 1 questions" in claude.tools_report(game, 0)
     assert (tmp_path / f"{claude.session_id}.tools.txt").exists()
+    claude.call("question", schemas.RESPONSE_SCHEMA, None)
+    assert claude.tokens == {"input": 2004, "output": 1800, "thinking": 1600}   # usage — за вызов, складываем
+    usage = []
+    cli.report_claude_usage(game, usage.append)
+    assert "2 Claude calls" in usage[0] and "tokens: 2,004 in, 1,800 out (thinking 1,600; ≈ 900 out per call)" in usage[0]
+
+
+def test_default_effort_and_time_budget():
+    from heroes.players.claude_cli import DEFAULT_EFFORT, tokens_of
+    claude = ClaudePlayer(transcript_dir=None, tools=False)
+    assert DEFAULT_EFFORT == "max" and claude.effort == "max" and claude.variant.endswith("/max")
+    assert ClaudePlayer(transcript_dir=None, tools=False, effort=None).variant.endswith("/default")   # старые сохранения
+    game = Game([claude, RandomBot(0)], factions=["orcs", "humans"])
+    assert "hard limit of about 10 minutes" in claude.system_prompt(game, 0)
+    assert "time limit" not in Workspace("v", "s", Path("/nonexistent")).prompt_text()
+    assert tokens_of({}) == {"input": 0, "output": 0, "thinking": 0}
+
+
+class Recorder(RandomBot):
+    def __init__(self, seed):
+        super().__init__(seed)
+        self.forced = []
+
+    def on_forced(self, decision, answer, view):
+        self.forced.append((decision.kind, decision.reason, view.player == decision.player))
+
+
+def test_every_skipped_question_has_a_reason():
+    kinds = set()
+    for seed in range(12):
+        players = [Recorder(seed * 4 + i) for i in range(4)]
+        factions = [["orcs", "humans", "nagas", "undead"], ["elves", "dwarves", "nagas", "orcs"],
+                    ["undead", "elves", "dwarves", "humans"]][seed % 3]
+        Game(players, factions=factions).run()
+        for kind, reason, own in (f for pl in players for f in pl.forced):
+            assert reason and own, kind
+            kinds.add(kind)
+    assert {"destination", "build_recruit"} <= kinds
+
+
+def test_skipped_question_goes_to_events_in_place():
+    claude = ClaudePlayer(transcript_dir=None, tools=False)
+    game = Game([claude, RandomBot(0)], names=["Лео", "Ева"], factions=["orcs", "humans"])
+    view = SimpleNamespace(game=game, player=0)
+    claude.seen_log = len(game.state.log)
+    game.log("Ева moves to Улин")
+    claude.on_forced(SimpleNamespace(kind="destination", reason="your 1 MP are not enough to enter any neighbouring "
+                                     "region, so you stay in Чарил"), "Чарил", view)
+    game.log("Лео stays in Чарил")
+    claude.on_forced(SimpleNamespace(kind="commit_army", reason="you had no units to commit"), {}, view)
+    assert claude.new_events(game) == [
+        "Ева moves to Улин",
+        "(You were not asked destination: your 1 MP are not enough to enter any neighbouring region, so you stay in "
+        "Чарил; the engine answered for you: Чарил.)",
+        "Лео stays in Чарил",
+        "(You were not asked commit_army: you had no units to commit.)"]
+    assert claude.new_events(game) == []
+
+
+def test_tools_status_in_log(monkeypatch):
+    monkeypatch.setattr("heroes.players.claude_cli.tools_available", lambda: False)
+    off, no_bwrap = ClaudePlayer(transcript_dir=None, tools=False), ClaudePlayer(transcript_dir=None, effort="low")
+    game = Game([off, no_bwrap], names=["Лео", "Ева"], factions=["orcs", "humans"])
+    lines = []
+    cli.report_claude_setup(game, lines.append)
+    assert lines[0].startswith("Лео: Claude ") and lines[0].endswith("effort max, tools off (--no-tools)")
+    assert lines[1].endswith("effort low, tools off (no bwrap sandbox found)")
+    monkeypatch.setattr("heroes.players.claude_cli.tools_available", lambda: True)
+    assert ClaudePlayer(transcript_dir=None).tools_status() == "tools on (bwrap sandbox)"
 
 
 def test_tools_missing_and_report_before_review(strategy_dir):

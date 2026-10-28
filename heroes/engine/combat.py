@@ -213,6 +213,8 @@ def ask_upgrades(game: Game, battle: Battle, armies: dict[int, dict[str, int]], 
                 else f"Expected an integer from 0 to {m}",
                 0,
                 forced=most == 0,
+                reason=f"you could not upgrade any committed unit for this battle ({source}: not enough resources "
+                       "or nothing to upgrade)",
             ))
     if decisions:
         answers = game.ask_all(decisions) if secret else [game.resolve(d) for d in decisions]
@@ -300,6 +302,8 @@ def resolve_contest(game: Game, region: str, players: list[int], entitled: set[i
             default,
             forced=len(options) == 1,  # все варианты ведут к одному и тому же
             recorded=lambda a, o=allowed: check_choice(a, o),  # старые сохранения: равносильные варианты
+            reason=(f"the battle in {region} was already certain, so every stance led to it" if certain
+                    else f"every stance in {region} led to the same outcome"),
         )
         game.log(f"{st.players[p].name} in {region}: {STANCES[stances[p]]}")
     claims = [p for p, s in stances.items() if s == "claim"]
@@ -434,6 +438,7 @@ def player_battle(game: Game, region: str, players: list[int], hydras: list[int]
             lambda a, p=p: check_commit(game, p, a, available_units(game, p)),
             {},
             forced=not has_units(game, p),  # заявить некого
+            reason=f"you had no units to commit to the battle in {region}",
         )
         for p in players
     ]
@@ -499,7 +504,8 @@ def choose_reward(game: Game, winner: int, losers: list[int], strengths: dict[in
         default = {"type": "artifact", "from": q, "artifact": arts[0]}
     only = only_reward(options)
     answer = game.ask(winner, "choose_reward", "\n".join(lines), {"options": options},
-                      lambda a: check_reward(a, options), only or default, forced=only is not None)
+                      lambda a: check_reward(a, options), only or default, forced=only is not None,
+                      reason="only one reward was possible")
     apply_reward(game, winner, answer, circled)
     return answer["type"]
 
@@ -603,6 +609,8 @@ def try_capture_fortress(game: Game, p: int) -> None:
         None,
         forced=max_strength(game, p, battle) <= fortress.strength,  # не взять и всеми
         recorded=lambda a: None if a is None else check_commit(game, p, a, available_units(game, p)),
+        reason=f"even all your units (strength {max_strength(game, p, battle)}) could not beat the fortress in {region} "
+               f"(strength {fortress.strength}), so you did not attack",
     )
     if declined(answer):
         return
@@ -641,6 +649,8 @@ def hydra_capture_fortress(game: Game, p: int) -> None:
         lambda a: None if a is None else check_army(a, army),
         None,
         forced=strength <= fortress.strength,
+        reason=f"Гидра's strength {strength} could not beat the fortress in {region} (strength {fortress.strength}), "
+               "so she did not attack",
     )
     if not answer:
         return
@@ -694,6 +704,7 @@ def fight_monster(game: Game, p: int, leftover: int, stayed: bool = False) -> No
         # ни одно доступное чудовище не победить даже всеми войсками
         forced=all(line[i].strength >= best for i in candidates),
         recorded=lambda a: check_monster(game, p, a, candidates, pool, hydra_region, strict=False),
+        reason=f"even all your units (strength {best}) could not beat any monster you could reach, so you did not fight",
     )
     if not answer:
         return

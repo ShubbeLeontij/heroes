@@ -130,9 +130,10 @@ class Game:
             listener(message)
 
     def ask(self, p: int, kind: str, text: str, data: dict, validate: Callable[[Any], str | None], default: Any,
-            forced: bool = False, recorded: Callable[[Any], str | None] | None = None) -> Any:
-        """forced — выбора нет: игрока не спрашивать, ответ — default; recorded — см. Decision.recorded."""
-        return self.resolve(Decision(kind, p, text, data, validate, default, forced, recorded))
+            forced: bool = False, recorded: Callable[[Any], str | None] | None = None, reason: str = "") -> Any:
+        """forced — выбора нет: игрока не спрашивать, ответ — default (reason — почему);
+        recorded — см. Decision.recorded."""
+        return self.resolve(Decision(kind, p, text, data, validate, default, forced, recorded, reason))
 
     def ask_all(self, decisions: list[Decision]) -> list[Any]:
         """Тайные одновременные решения: каждый отвечает, не зная ответов остальных.
@@ -239,6 +240,8 @@ class Game:
                 self.replay_queue.popleft()
                 if decision.check_recorded(head["answer"]) is None:
                     return head["answer"]
+        if not self.replay_queue:   # при загрузке сохранения пропущенное уже сообщали
+            self.players[decision.player].on_forced(decision, decision.default, GameView(self, decision.player))
         return decision.default
 
     def _replay(self, decision: Decision) -> Any:
@@ -270,6 +273,7 @@ class Game:
                 lambda a, o=options: check_choice(a, o),
                 options[0],
                 forced=len(options) == 1,  # последнему выбирающему остаётся один регион
+                reason=f"only one portal region was left: {options[0]}",
             )
             taken.append(region)
             st.players[p].region = region   # фишка — на карте сразу; ресурсы региона — когда выберут все
