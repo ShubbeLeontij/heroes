@@ -61,6 +61,9 @@ def build_turn(game: Game, p: int, level: int) -> None:
             lambda a: check_steps(game, p, turn, a),
             [DONE],
             forced=not can_act(game, p, turn),
+            reason="nothing more was possible at this build action" if turn.built else
+                   f"at this build action (level {level_of(game, p, turn)}) you could neither build, hire nor upgrade "
+                   "anything: not enough resources or no building of a fitting level",
         )
         turn.rejected = None
         if not run_steps(game, p, turn, answer):

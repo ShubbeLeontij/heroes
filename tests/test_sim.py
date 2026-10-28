@@ -109,6 +109,8 @@ def test_agent_tools(saved, capsys):
     assert out["reach"].startswith("From ") and "MP" in out["reach"]
     assert "→" in out["artifacts"] and "Fortresses" in out["fortresses"] and "[NEXT]" in out["monsters"]
     assert "TOTAL" in out["scores"] and "gold" in out["stockpile"]
+    assert out["board"].startswith("BOARD: ") and ", player" not in out["board"]   # свой планшет
+    assert ", player 1" in agent_tools.board(s.game, s.me, "1")
     with pytest.raises(agent_tools.ToolError):
         agent_tools.player_arg(s.game, s.me, "nobody")
     assert "rounds: 7, 10, 13, 16" in out["schedule"]   # игрок 0, первый игрок 5-го раунда — игрок 1

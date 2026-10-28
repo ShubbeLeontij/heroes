@@ -12,5 +12,8 @@ class Player:
     def decide(self, decision: Decision, view: GameView) -> Any:
         raise NotImplementedError
 
+    def on_forced(self, decision: Decision, answer: Any, view: GameView) -> None:
+        """Решение без выбора: движок не спросил игрока и взял answer (почему — decision.reason)."""
+
     def on_invalid(self, decision: Decision, answer: Any, error: str) -> None:
         """Ответ отклонён движком; следующий decide() по тому же запросу — повторная попытка."""

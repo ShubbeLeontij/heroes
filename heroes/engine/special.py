@@ -53,6 +53,7 @@ def curse_choice(game: Game, p: int, options: list[str], text: str, cost: dict[s
         lambda a: None if a is None and optional else check_choice(a, options),
         None if optional else options[0],
         forced=not optional and len(options) == 1,
+        reason=f"only one region could be cursed: {options[0]}",
     )
     return answer
 
@@ -115,6 +116,7 @@ def circle_notes(game: Game, p: int, count: int) -> None:
             lambda a, o=options: check_choice(a, o),
             options[0],
             forced=len(options) == 1,
+            reason=f"the only possible move on your hydra track: {options[0]}",
         )
         if answer == "open":
             player.notes[empty[0]] = 1
@@ -138,6 +140,7 @@ def summon_hydra(game: Game, p: int) -> None:
         lambda a: check_choice(a, options),
         options[0],
         forced=len(options) == 1,
+        reason=f"there was only one lake region to summon Гидра into: {options[0]}",
     )
     name = game.faction_of(p).units[unit].name
     if player.hydra:

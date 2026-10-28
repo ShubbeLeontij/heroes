@@ -1,6 +1,8 @@
 """heroes-tool: мелкие справочные инструменты Claude-игрока. Считают по партии на момент текущего вопроса,
 ничего не меняют и не расходуют ходы:
 
+  heroes-tool board [игрок]           полный планшет игрока (правило открытости): здания с ценами и свойствами,
+                                      артефакты, цены найма, линия чудовищ, стоимость перемещения
   heroes-tool max_strength [игрок]    сила армии игрока сейчас и сколько можно добавить наймом
   heroes-tool schedule                в каких раундах вы выбираете порядок действий (первый игрок)
   heroes-tool tree [игрок]            дерево строительства: уровни, требования, что открывает, статус
@@ -53,6 +55,11 @@ def who(game: Game, me: int, p: int) -> str:
 
 
 # --- инструменты ----------------------------------------------------------------------------------
+
+def board(game: Game, me: int, arg: str | None = None) -> str:
+    p = player_arg(game, me, arg)
+    return R.board(game, p, own=p == me)
+
 
 def max_strength(game: Game, me: int, arg: str | None = None) -> str:
     p = player_arg(game, me, arg)
@@ -224,7 +231,7 @@ def stockpile(game: Game, me: int, arg: str | None = None) -> str:
     return "\n".join(lines)
 
 
-TOOLS = {f.__name__: f for f in (max_strength, schedule, tree, reach, artifacts, fortresses, monsters, scores, stockpile)}
+TOOLS = {f.__name__: f for f in (board, max_strength, schedule, tree, reach, artifacts, fortresses, monsters, scores, stockpile)}
 
 
 def main(argv: list[str] | None = None) -> int:

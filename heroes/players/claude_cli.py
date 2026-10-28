@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING, Any, Callable
 from .. import sim
 from ..engine import scoring
 from ..protocol import journal, notes, prompts, schemas, tool_log
-from ..protocol import render_text as R
 from .base import Player
 from .random_bot import RandomBot
 from .workspace import Workspace, available as tools_available
@@ -39,6 +38,7 @@ if TYPE_CHECKING:
     from ..engine.game import Game, GameView
 
 DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_EFFORT = "max"   # None — уровень модели по умолчанию (так идут партии, начатые до 0.6.0)
 WORKDIR = Path.home() / ".cache" / "heroes-claude"
 TRANSCRIPTS = Path("logs") / "claude"
 
@@ -56,6 +56,22 @@ def unwrap(answer: Any) -> Any:
         except json.JSONDecodeError:
             pass
     return answer
+
+
+def short_json(value: Any, limit: int = 300) -> str:
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+    return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
+def tokens_of(out: dict) -> dict[str, int]:
+    """Токены одного вызова из итоговой записи claude -p: входные (вместе с кэшем), выходные и из них — на размышления."""
+    usage = out.get("usage") if isinstance(out.get("usage"), dict) else {}
+
+    def n(value: Any) -> int:
+        return value if isinstance(value, int) else 0
+    details = usage.get("output_tokens_details") if isinstance(usage.get("output_tokens_details"), dict) else {}
+    return {"input": sum(n(usage.get(k)) for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")),
+            "output": n(usage.get("output_tokens")), "thinking": n(details.get("thinking_tokens"))}
 
 
 def place_of(game: Game, p: int) -> tuple[int, int, bool]:
@@ -80,7 +96,7 @@ class ClaudePlayer(Player):
     def __init__(
         self,
         model: str = DEFAULT_MODEL,
-        effort: str | None = None,
+        effort: str | None = DEFAULT_EFFORT,
         session_id: str | None = None,
         timeout: float | None = None,
         retries: int = 2,
@@ -90,7 +106,7 @@ class ClaudePlayer(Player):
         tools: bool | None = None,
     ):
         """session_id — продолжить существующую сессию (после загрузки сохранения).
-        on_comment(имя, тип решения, комментарий) — показать замысел Claude (например, зрителю).
+        on_comment(имя, тип решения, анализ) — показать замысел Claude (например, зрителю).
         tools — дать Claude инструменты (None — если есть песочница)."""
         self.model = model
         self.effort = effort
@@ -99,25 +115,30 @@ class ClaudePlayer(Player):
         self.started = session_id is not None
         self.resumed = session_id is not None
         self.tools = tools_available() if tools is None else tools
+        self.tools_off_by_flag = tools is False      # --no-tools (или так начата загруженная партия)
         self.workspace = Workspace(self.variant, self.session_id, workdir) if self.tools else None
         self.prepared = False
         self.timeout = timeout or (900 if self.tools else 600)
         self.retries = retries
         self.on_comment = on_comment
         self.transcript_dir = transcript_dir
+        # пересказ партии для человека: анализ, который Claude пишет перед каждым ответом, и его решения
+        self.story_file = transcript_dir / f"{self.session_id}.story.md" if transcript_dir else None
         self.workdir = workdir
         self.binary = shutil.which("claude")
         self.seen_log: int | None = None
+        self.skipped: list[tuple[int, str]] = []    # (длина журнала в тот момент, строка): пропущенные вопросы
         # ошибка движка в прошлом ответе и вопрос, к которому она относится: после ответа по умолчанию
         # движок задаёт уже другой вопрос, и ошибка в него не попадает
         self.pending_error: tuple[Decision, str] | None = None
-        self.last_comment = ""
+        self.last_analysis = ""
         self.where: tuple[int, str] = (0, "")        # раунд и вид вопроса, на который идёт вызов Claude
         self.reported = 0                            # сколько записей tool_log уже вошло в отчёт перед разбором
         self.tool_log: list[dict] = []               # {round, kind, tool, detail}: что запускал Claude
         self.game: Game | None = None
         self.cost_usd = 0.0
         self.calls = 0
+        self.tokens = {"input": 0, "output": 0, "thinking": 0}   # за всю партию, по полю usage каждого вызова
         self._lock = threading.Lock()
         self._decide_lock = threading.Lock()
 
@@ -138,7 +159,8 @@ class ClaudePlayer(Player):
             game, p = view.game, view.player
             self.begin(game, p)
             spec = schemas.combined({d.kind: schemas.spec_for(game, d) for d in decisions})
-            prompt = prompts.questions(game, p, decisions, spec, self.new_events(game), None, self.variant)
+            prompt = prompts.questions(game, p, decisions, spec, self.new_events(game), None, self.variant,
+                                       self.tools_hint())
             answer = self.query(game, p, decisions, prompt, spec)
             return [d.default for d in decisions] if answer is None else [answer[d.kind] for d in decisions]
 
@@ -149,7 +171,8 @@ class ClaudePlayer(Player):
         upgrade = schemas.with_upgrade(game, decision, spec)
         pending, self.pending_error = self.pending_error, None
         error = pending[1] if pending and pending[0] is decision else None
-        prompt = prompts.question(game, p, decision, upgrade or spec, self.new_events(game), error, self.variant)
+        prompt = prompts.question(game, p, decision, upgrade or spec, self.new_events(game), error, self.variant,
+                                  self.tools_hint())
         answer = self.query(game, p, [decision], prompt, upgrade or spec)
         return decision.default if answer is None else answer
 
@@ -163,10 +186,9 @@ class ClaudePlayer(Player):
         """Задать вопрос (с повторами при сбое и ответе не по схеме); None — Claude так и не ответил."""
         kind = "+".join(d.kind for d in decisions)
         last_error = None
-        shown: set[int] = set()
         for _ in range(self.retries + 1):
             try:
-                result = self.ask_with_boards(game, p, kind, prompt, shown)
+                result = self.ask(game, p, kind, prompt)
                 raw = unwrap(result["answer"])
             except ClaudeError as e:
                 last_error = str(e)
@@ -182,28 +204,43 @@ class ClaudePlayer(Player):
                 last_error = f"answer does not match the schema: {e}"
                 self.confusion(game, p, kind, "answer not in the expected format",
                                {"Question": "\n\n".join(d.text for d in decisions), "Answer": raw, "Error": last_error,
-                                "Claude's comment": result.get("comment")})
+                                "Claude's analysis": result.get("analysis")})
                 prompt = f"Could not parse your answer ({last_error}). Answer the same question strictly by the schema."
                 continue
-            comment = str(result.get("comment", "")).strip()
-            self.last_comment = comment
-            if comment and self.on_comment:
-                self.on_comment(game.state.players[p].name, decisions[0].kind, comment)
+            analysis = str(result.get("analysis") or "").strip()
+            self.last_analysis = analysis
+            self.tell(game, p, f"Round {game.state.round} · {kind}",
+                      (analysis or "(no analysis)") + f"\n\n**Decision:** `{short_json(raw)}`")
+            if analysis and self.on_comment:
+                self.on_comment(game.state.players[p].name, decisions[0].kind, analysis)
             return answer
         game.log(f"⚠ {game.state.players[p].name}: Claude did not answer ({last_error}), the default was used")
         return None
 
+    def on_forced(self, decision, answer, view):
+        """Вопрос без выбора движок не задал: Claude узнает об этом и о причине в событиях перед следующим вопросом."""
+        line = f"(You were not asked {decision.kind}: {decision.reason or 'there was only one option'}"
+        trivial = answer is None or answer in ({}, [], ["done"]) or answer == 0 and not isinstance(answer, bool)
+        line += ".)" if trivial else f"; the engine answered for you: {short_json(answer)}.)"
+        with self._lock:
+            self.skipped.append((len(view.game.state.log), line))
+
     def on_invalid(self, decision, answer, error):
         self.pending_error = (decision, error)
         if self.game is not None:
+            self.tell(self.game, decision.player, None, f"*The engine rejected this answer: {error}*")
             self.confusion(self.game, decision.player, decision.kind, "answer rejected by the engine",
                            {"Question": decision.text, "Answer": answer, "Engine": error,
-                            "Claude's comment": self.last_comment})
+                            "Claude's analysis": self.last_analysis})
 
     # --- начало и конец партии ------------------------------------------------------------------
 
+    def tools_hint(self) -> str | None:
+        return self.workspace.hint() if self.workspace else None
+
     def system_prompt(self, game: Game, p: int) -> str:
-        return prompts.system_prompt(game, p, self.variant, self.workspace.prompt_text() if self.workspace else None)
+        return prompts.system_prompt(game, p, self.variant, self.workspace.prompt_text() if self.workspace else None,
+                                     self.timeout)
 
     def make_plan(self, game: Game, p: int) -> None:
         """Перед первым решением: Claude продумывает план на партию против выпавших фракций.
@@ -217,6 +254,7 @@ class ClaudePlayer(Player):
             self.report_unclear(game, p, "game_plan", result)
             plan = unwrap(result.get("answer"))
             plan = plan.strip() if isinstance(plan, str) else "" if plan is None else json.dumps(plan, ensure_ascii=False)
+            self.tell(game, p, "Plan for the game", plan or "(no plan)")
             if plan and self.on_comment:
                 self.on_comment(game.state.players[p].name, "game_plan", plan)
             return
@@ -245,6 +283,7 @@ class ClaudePlayer(Player):
                 changes = notes.validate(answer, allowed)
                 rules_add = notes.validate_rules_add(answer)
                 tools_missing = notes.validate_tools_missing(answer)
+                comment = answer.get("summary") if isinstance(answer.get("summary"), str) else ""
             except ClaudeError as e:
                 last_error = str(e)
                 continue
@@ -253,7 +292,8 @@ class ClaudePlayer(Player):
                 prompt = f"YOUR ANSWER WAS REJECTED: {last_error}\nAnswer the same question again."
                 continue
             self.report_unclear(game, p, "game_over", result)
-            review, comment, last_error = review.strip(), str(result.get("comment", "")).strip(), None
+            review, comment, last_error = review.strip(), comment.strip(), None
+            self.tell(game, p, "Review after the game", review)
             break
         else:
             review = ""
@@ -312,6 +352,29 @@ class ClaudePlayer(Player):
                 pass
         return text
 
+    def tell(self, game: Game, p: int, heading: str | None, text: str) -> None:
+        """Дописать в пересказ партии (logs/claude/<сессия>.story.md); heading None — продолжение прошлого раздела."""
+        if not self.story_file:
+            return
+        pl = game.state.players[p]
+        try:
+            with self._lock:
+                self.story_file.parent.mkdir(parents=True, exist_ok=True)
+                new = not self.story_file.exists()
+                with open(self.story_file, "a", encoding="utf-8") as f:
+                    if new:
+                        f.write(f"# {pl.name} ({game.faction_of(p).name}): the story of the game\n\n"
+                                f"Claude {self.variant}, game {game.meta.get('game_id')}.\n\n")
+                    f.write((f"## {heading}\n\n" if heading else "") + text.strip() + "\n\n")
+        except OSError:
+            pass
+
+    def tools_status(self) -> str:
+        """Для журнала: включены ли у Claude инструменты и почему нет."""
+        if self.tools:
+            return "tools on (bwrap sandbox)"
+        return "tools off (" + ("--no-tools" if self.tools_off_by_flag else "no bwrap sandbox found") + ")"
+
     def result_row(self, game: Game, p: int) -> dict:
         """Строка results.csv для этого игрока."""
         vp, place, winner = place_of(game, p)
@@ -348,12 +411,19 @@ class ClaudePlayer(Player):
     def new_events(self, game: Game) -> list[str]:
         """События с прошлого вопроса; в первый раз — только хвост лога (важно после загрузки)."""
         log = game.state.log
-        if self.seen_log is None:
-            events = log[max(0, len(log) - 60):]
-            if self.resumed:
-                events = ["(the game was loaded from a save; recent events below)", *events]
-        else:
-            events = log[self.seen_log:]
+        start = max(0, len(log) - 60) if self.seen_log is None else self.seen_log
+        with self._lock:
+            skipped, self.skipped = self.skipped, []
+        notes_at: dict[int, list[str]] = {}
+        for at, line in skipped:   # пропущенный вопрос — на своё место среди событий
+            notes_at.setdefault(min(max(at, start), len(log)), []).append(line)
+        events = []
+        for i in range(start, len(log) + 1):
+            events += notes_at.get(i, [])
+            if i < len(log):
+                events.append(log[i])
+        if self.seen_log is None and self.resumed:
+            events = ["(the game was loaded from a save; recent events below)", *events]
         self.seen_log = len(log)
         return events
 
@@ -369,36 +439,6 @@ class ClaudePlayer(Player):
                 self.prepared = True
             sim.export(game, p, kind.split("+")[0], self.workspace.game_file)
         return self.call(prompt, schemas.RESPONSE_SCHEMA, None if self.started else self.system_prompt(game, p))
-
-    def ask_with_boards(self, game: Game, p: int, kind: str, prompt: str, shown: set[int]) -> dict:
-        """Вопрос, перед ответом на который Claude может посмотреть полные планшеты игроков (view_boards):
-        тогда он получает их и тот же вопрос ещё раз, а ответ с просьбой не засчитывается. Каждый планшет
-        показывается один раз за решение (shown), так что вопрос не превращается в бесконечный просмотр."""
-        result = self.ask(game, p, kind, prompt)
-        wanted = [q for q in self.requested_boards(game, result.get("view_boards")) if q not in shown]
-        if not wanted:
-            return result
-        shown.update(wanted)
-        self.tool_log.append({"round": game.state.round, "kind": kind, "tool": "view_boards",
-                              "detail": ", ".join(game.state.players[q].name for q in wanted)})
-        boards = [R.board(game, q, own=q == p) for q in wanted]
-        return self.ask(game, p, kind, "\n\n".join(boards) + f"\n\nNow answer the same question ({kind}).")
-
-    @staticmethod
-    def requested_boards(game: Game, request: Any) -> list[int]:
-        """Номера игроков из view_boards: номера или имена; непонятное пропускается."""
-        if not isinstance(request, list):
-            return []
-        names = {pl.name.casefold(): q for q, pl in enumerate(game.state.players)}
-        wanted = []
-        for item in request:
-            if isinstance(item, bool):
-                continue
-            text = str(item).strip()
-            q = item if isinstance(item, int) else int(text) if text.isdigit() else names.get(text.casefold())
-            if q is not None and 0 <= q < len(game.state.players) and q not in wanted:
-                wanted.append(q)
-        return wanted
 
     def call(self, prompt: str, schema: dict, system: str | None) -> dict:
         if not self.binary:
@@ -427,34 +467,37 @@ class ClaudePlayer(Player):
         except subprocess.TimeoutExpired:
             raise ClaudeError(f"no answer within {self.timeout:.0f} s") from None
         elapsed = time.monotonic() - started
-        out, used = tool_log.parse_stream(proc.stdout)
+        out, used, text = tool_log.parse_stream(proc.stdout)
         if out is None:
             raise ClaudeError(f"exit code {proc.returncode}: {(proc.stderr or proc.stdout).strip()[-300:]}")
         self.tool_log += [{"round": self.where[0], "kind": self.where[1], **call} for call in used]
         if out.get("session_id") == self.session_id:
             self.started = True
         self.calls += 1
-        # total_cost_usd — накопленная стоимость всей сессии, а не одного вызова.
+        # total_cost_usd — накопленная стоимость всей сессии, а usage — только этого вызова.
         self.cost_usd = max(self.cost_usd, out.get("total_cost_usd") or 0)
+        tokens = tokens_of(out)
+        for key, n in tokens.items():
+            self.tokens[key] += n
         result = out.get("structured_output")
         if result is None and isinstance(out.get("result"), str):
             try:
                 result = json.loads(out["result"])
             except json.JSONDecodeError:
                 result = None
-        self.write_transcript(prompt, system, out, result, elapsed, used)
+        self.write_transcript(prompt, system, out, result, elapsed, used, tokens, text)
         if out.get("is_error") or not isinstance(result, dict):
             raise ClaudeError(f"CLI error: {out.get('subtype')} {str(out.get('result'))[:300]}")
-        return result
+        return {**result, "analysis": text}
 
     def write_transcript(self, prompt: str, system: str | None, out: dict, result: Any, elapsed: float,
-                         used: list[dict]) -> None:
+                         used: list[dict], tokens: dict[str, int], analysis: str) -> None:
         if not self.transcript_dir:
             return
         self.transcript_dir.mkdir(parents=True, exist_ok=True)
         record = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "seconds": round(elapsed, 1),
-                  "cost_usd": out.get("total_cost_usd"), "system": system, "prompt": prompt,
-                  "response": result, "raw_result": None if result else out.get("result"),
-                  "tools": [f"{c['tool']} {c['detail']}".strip() for c in used]}
+                  "cost_usd": out.get("total_cost_usd"), "tokens": tokens, "system": system, "prompt": prompt,
+                  "analysis": analysis, "response": result, "raw_result": None if result else out.get("result"),
+                  "tools_enabled": self.tools, "tools": [f"{c['tool']} {c['detail']}".strip() for c in used]}
         with self._lock, open(self.transcript_dir / f"{self.session_id}.jsonl", "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")

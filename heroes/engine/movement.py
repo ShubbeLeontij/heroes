@@ -222,6 +222,7 @@ def move_action(game: Game, level: int) -> None:
             lambda a, opts=options[p]: check_choice(a, list(opts)),
             st.players[p].region,
             forced=len(options[p]) == 1,  # очков перемещения не хватает ни на один соседний регион
+            reason=f"your {mp[p]} MP are not enough to enter any neighbouring region, so you stay in {st.players[p].region}",
         )
         for p in order
     ]
@@ -236,6 +237,8 @@ def move_action(game: Game, level: int) -> None:
             lambda a, opts=hydras[p]: check_choice(a, list(opts)),
             st.players[p].hydra,
             forced=len(hydras[p]) == 1,
+            reason=f"your {game.faction_of(p).units[hydra_unit(game, p)].name} cannot move anywhere from "
+                   f"{st.players[p].hydra}, so she stays there",
         )
         for p in hydras
     ]
