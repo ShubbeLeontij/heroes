@@ -135,6 +135,8 @@ def test_static_data_matches_map():
         {"from": "scout", "to": "brute", "cost": {"rage": 1}}, {"from": "brute", "to": "blaster", "cost": {"rage": 3}},
         {"from": "scout", "to": "blaster", "cost": {"rage": 4}}]
     assert data["factions"]["orcs"]["rules"]["rage"]["unit_upgrades"] == []
+    # пороги ПО за ярость показывает склад — карточки свойства на планшете нет
+    assert [rid for f in data["factions"].values() for rid, r in f["rules"].items() if r["in_stock"]] == ["rage"]
 
 
 def test_gui_client_reconnects_mid_game():
