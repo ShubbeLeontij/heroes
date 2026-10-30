@@ -75,8 +75,8 @@ export class MapView {
     this.tokenHover = null;
     this.peek = false;      // долгое нажатие: все фишки полупрозрачны
     this.spots = new Map(); // фишка ("player:0", "hydra:1") → где нарисована (координаты рисунка)
-    this.moving = new Map();// едущая фишка → {from, to, start}
-    this.popups = [];       // таблички: {key, text, start}
+    this.moving = new Map();// едущая фишка → {from, to, start, el}
+    this.popups = [];       // таблички: {key, text, start, el}
     this.fresh = [];
     this.tick = null;
     this.zoom = 1;
@@ -570,7 +570,7 @@ export class MapView {
         const spot = [tx + i * step, ty];
         this.spots.set(key, spot);
         const move = this.moving.get(key);
-        if (move) move.to = spot;   // едет сюда: рисует animate
+        if (move) Object.assign(move, { to: spot, el: null });   // едет сюда: рисует animate (масштаб мог смениться)
         else this.html.append(this.token(key, spot));
       });
     }
@@ -778,8 +778,15 @@ export class MapView {
       this.redraw();   // доехавшие встают на свои места
       return;
     }
+    // элементы не пересоздаются каждый кадр: новый <img> телефон не успевает показать — значки пропадали бы
     this.anim.replaceChildren();
-    for (const [key, move] of this.moving) if (move.to) this.anim.append(this.token(key, this.spotAt(key, t), true));
+    for (const [key, move] of this.moving) {
+      if (!move.to) continue;
+      const [x, y] = this.spotAt(key, t);
+      move.el ??= this.token(key, [x, y], true);
+      Object.assign(move.el.style, { left: `${x}px`, top: `${y}px` });
+      this.anim.append(move.el);
+    }
     this.drawPopups(t);
     if (this.moving.size || this.popups.length) this.animate();
   }
@@ -809,7 +816,7 @@ export class MapView {
       for (const [pop, lift] of placed) {
         const bottom = up ? y - rad - this.px(6) - lift : y + rad + this.px(6) + line + lift;
         const age = (t - pop.start) / POPUP_SECONDS;
-        const el = rich(pop.text, "div", "maptext popup");
+        const el = pop.el ??= rich(pop.text, "div", "maptext popup");
         Object.assign(el.style, { left: `${x}px`, top: `${bottom}px`, fontSize: `${face}px`, background: color(Number(key.split(":")[1])),
           opacity: age > 0.6 ? Math.max(0, 1 - (age - 0.6) / 0.4) : 1, borderWidth: `${this.px(2)}px` });
         el.dataset.anchor = "s";

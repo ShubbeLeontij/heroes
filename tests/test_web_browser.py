@@ -425,6 +425,35 @@ def test_map_gestures(browser):
         network.server.close()
 
 
+def test_map_popup_icons(browser):
+    """Табличка над фишкой со значком («+1» и наука): элемент не пересоздаётся каждый кадр, значок успевает загрузиться
+    (на телефоне новый <img> на каждом кадре не показывался — оставалось одно «+1»)."""
+    recorder = DestinationRecorder(1)
+    with pytest.raises(Stop):
+        Game([recorder, RandomBot(2)]).run()
+    network = cli.Network(0, "secret", log_fn=lambda text: None)
+    network.seat("Гость")
+    network.server.start()
+    try:
+        browser.screen(390, 844)
+        browser.open(f"http://127.0.0.1:{network.server.port}/")
+        browser.wait_for("window.app")
+        browser.evaluate(f"app.handle({json.dumps(recorder.sync)}); 1")
+        browser.wait_for("app.map.geometry && app.map.spots.has('player:0')")
+        browser.evaluate(f"app.map.event(['player', 0, {json.dumps('+1' + M['science'])}]); 1")
+        browser.wait_for("!!document.querySelector('.maptext.popup img.ic')", timeout=3)
+        got = browser.evaluate("""(async () => {
+          const img = () => document.querySelector(".maptext.popup img.ic");
+          const first = img();
+          for (let i = 0; i < 10; i++) await new Promise(requestAnimationFrame);
+          return [img() === first, first.complete && first.naturalWidth > 0, first.parentElement.textContent];
+        })()""")
+        assert got == [True, True, "+1"]
+        assert not browser.errors, browser.errors
+    finally:
+        network.server.close()
+
+
 def test_tips(browser):
     """Подсказки: наведение мышью на артефакт, чудовище и склад планшета — полная информация по всем игрокам;
     на телефоне — по тапу (и по рисунку артефакта на карте); тап мимо — подсказка закрывается."""
