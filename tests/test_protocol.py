@@ -125,11 +125,16 @@ def test_guest_avatar_reaches_everyone():
 
 
 def test_static_data_matches_map():
-    game = Game([RandomBot(0), RandomBot(1), RandomBot(2), RandomBot(3)])
+    game = Game([RandomBot(0), RandomBot(1), RandomBot(2), RandomBot(3)], factions=["humans", "orcs", "elves", "nagas"])
     data = static_data(game)
     assert data["regions"]["Бринлор"]["fortress"]["strength"] == 14
     assert "Бринлор" in data["adjacent"]["Асандер"]
     assert data["factions"]["humans"]["units"]["soldier"]["name"] == "Солдат"
+    # модификация войск орков за ярость — карточка свойства на планшете показывает цены
+    assert data["factions"]["orcs"]["rules"]["upgrade"]["unit_upgrades"] == [
+        {"from": "scout", "to": "brute", "cost": {"rage": 1}}, {"from": "brute", "to": "blaster", "cost": {"rage": 3}},
+        {"from": "scout", "to": "blaster", "cost": {"rage": 4}}]
+    assert data["factions"]["orcs"]["rules"]["rage"]["unit_upgrades"] == []
 
 
 def test_gui_client_reconnects_mid_game():

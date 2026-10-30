@@ -463,6 +463,7 @@ table.army-table td.num, table.form-table td.num { text-align: center; }
 .science-cell.free { border: 2px solid var(--good); }
 .science-cell small { position: absolute; left: 0; right: 0; bottom: 0; color: var(--good); font-size: 0.6rem; }
 .rule { margin-bottom: 6px; }
+.upgrade-step { white-space: nowrap; }   /* ступень модификации и её цена — не на разных строках */
 
 .units { display: flex; flex-direction: column; gap: 4px; }
 .unit { display: grid; grid-template-columns: minmax(6em, auto) 2.6em auto 1fr; align-items: baseline; gap: 2px 8px; font-size: 0.9rem; }

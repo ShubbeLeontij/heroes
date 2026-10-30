@@ -146,7 +146,18 @@ export class BoardView {
     const rules = Object.values(faction.rules || {});
     if (!rules.length) return null;
     return h("section", h("h3", "Свойства фракции"),
-      rules.map((rule) => h("div.card.rule", h("b", rule.name), h("p", markup(rule.text_board)))));
+      rules.map((rule) => h("div.card.rule", h("b", rule.name), h("p", markup(rule.text_board)),
+        this.upgradePrices(faction, rule.unit_upgrades || []))));
+  }
+
+  // цены модификации войск (орки) по ступеням: «Разведчик → Громила 1{rage}, Громила → Взрыватель 3{rage}»;
+  // модификация через ступень стоит их сумму — её не пишем
+  upgradePrices(faction, paths) {
+    const order = Object.keys(faction.units);
+    const steps = paths.filter((x) => order.indexOf(x.to) - order.indexOf(x.from) === 1);
+    if (!steps.length) return null;
+    return h("p", steps.map((x, i) => [i ? ", " : "",
+      h("span.upgrade-step", `${faction.units[x.from].name} → ${faction.units[x.to].name} ${res(x.cost)}`)]));
   }
 
   units(pl, faction) {
