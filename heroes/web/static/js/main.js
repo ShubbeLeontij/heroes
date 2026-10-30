@@ -117,6 +117,7 @@ class App {
     this.board = new BoardView($("board"));
     this.boardTab = null;     // открытая вкладка планшетов: место игрока или "all" — «Все игроки»
     this.boardStale = false;  // вкладка планшетов скрыта (телефон): перерисовать, когда её откроют
+    this.movePeek = false;    // наведён конь в полосе раунда: карта показывает, куда дойдёт игрок
     setSeatAvatar((p) => this.avatarSrc(p));
     setTipProvider((kind, args) => (this.static && this.state ? tipContent(this.static, this.state, kind, args, this.viewer) : null));
     for (const b of document.querySelectorAll("#tabs button")) b.addEventListener("click", () => {   // решение, журнал: карта — своя
@@ -442,12 +443,29 @@ class App {
     else delete $("round").dataset.tip;
     const phase = this.ended ? null : st.phase;
     const chips = [];
+    if (this.movePeek) {   // полоса перестраивается: наведённого коня больше нет
+      this.movePeek = false;
+      this.map.setPreview(null);
+    }
     if (st.round) {
       if (phase === 0) chips.push(h("span.chip.current", "Выбор порядка действий"));
       else st.action_order.forEach((a, i) => {
         const n = i + 1;
         const cls = phase === null || phase === undefined || n > phase ? "" : n === phase ? ".current" : ".done";
-        chips.push(h("span.chip" + cls, { title: UI.actions[a] }, `${n}. `, icon(a)));
+        const chip = h("span.chip" + cls, { title: UI.actions[a] }, `${n}. `, icon(a));
+        // перемещение ещё впереди: наведение на коня обводит на карте, куда дойдёт игрок, чей планшет открыт
+        const reach = st.upcoming_reach || {};
+        if (a === "move" && !this.ended && Object.keys(reach).length) {
+          chip.addEventListener("pointerenter", () => {
+            this.movePeek = true;
+            this.map.setPreview(reach);
+          });
+          chip.addEventListener("pointerleave", () => {
+            this.movePeek = false;
+            this.map.setPreview(null);
+          });
+        }
+        chips.push(chip);
       });
     } else if (!this.ended) {
       chips.push(h("span.chip.current", "Выбор стартовых регионов"));

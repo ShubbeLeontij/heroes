@@ -139,6 +139,31 @@ def test_static_data_matches_map():
     assert [rid for f in data["factions"].values() for rid, r in f["rules"].items() if r["in_stock"]] == ["rage"]
 
 
+def test_upcoming_reach_until_the_move():
+    """Порядок действий выбран: пока перемещение впереди, состояние говорит, куда каждый дойдёт на его уровне;
+    в фазу перемещения и после — пусто."""
+    from heroes.engine.movement import base_move_points, reachable
+    from heroes.protocol.snapshot import snapshot
+
+    seen = {"ahead": 0, "after": 0}
+
+    class Watcher(RandomBot):
+        def decide(self, decision, view):
+            game = view.game
+            st, reach = game.state, snapshot(game)["upcoming_reach"]
+            level = st.action_order.index("move") + 1 if "move" in st.action_order else 0
+            if 1 <= st.phase < level:
+                seen["ahead"] += 1
+                assert reach == {str(p): reachable(game, p, base_move_points(game, p, level)) for p in range(len(st.players))}
+            else:
+                seen["after"] += 1
+                assert reach == {}
+            return super().decide(decision, view)
+
+    Game([Watcher(1), Watcher(2)], factions=["elves", "orcs"]).run()
+    assert seen["ahead"] and seen["after"]
+
+
 def test_gui_client_reconnects_mid_game():
     network = cli.Network(0, "secret", log_fn=lambda text: None)
     names = ["Guest", "Bot"]

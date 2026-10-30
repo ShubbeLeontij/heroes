@@ -13,7 +13,7 @@ from ..engine.actions import buildable
 from ..engine.combat import affordable_upgrades, army_strength, lone_hydra
 from ..engine.data import TERRAINS
 from ..engine.economy import holdings
-from ..engine.movement import reachable
+from ..engine.movement import base_move_points, reachable
 from ..engine.effects import (Battle, active_effects, battle_bonus, effects_of, hire_cost, hireable_units, hydra_unit,
                               move_cost, preview_battle, unit_strength)
 from ..engine.scoring import score_player
@@ -210,7 +210,18 @@ def snapshot(game: Game) -> dict:
         "cursed": dict(st.cursed),       # проклятый регион -> кто проклял (нежить)
         "terrain": dict(st.terrain),     # изменённая местность (Гейзер наг)
         "players": players,
+        "upcoming_reach": upcoming_reach(game),   # перемещение этого раунда ещё впереди: игрок -> регион -> цена в ОП
     }
+
+
+def upcoming_reach(game: Game) -> dict[str, dict[str, int]]:
+    """Порядок действий раунда выбран, перемещение ещё не началось: куда каждый игрок сможет дойти (как
+    move_preview, но уровень уже известен). Иначе пусто."""
+    st = game.state
+    level = st.action_order.index("move") + 1 if "move" in st.action_order else 0
+    if not 1 <= st.phase < level:
+        return {}
+    return {str(p): reachable(game, p, base_move_points(game, p, level)) for p, pl in enumerate(st.players) if pl.region}
 
 
 def safe_snapshot(game: Game, attempts: int = 5) -> dict:
@@ -248,8 +259,7 @@ def move_preview(game: Game) -> dict[str, dict[str, dict[str, int]]]:
     for p, pl in enumerate(game.state.players):
         if not pl.region:
             continue
-        extra = sum(e["value"] for e in effects_of(game, p, "extra_move_points"))
-        preview[str(p)] = {str(level): reachable(game, p, level + extra) for level in range(1, 5)}
+        preview[str(p)] = {str(level): reachable(game, p, base_move_points(game, p, level)) for level in range(1, 5)}
     return preview
 
 

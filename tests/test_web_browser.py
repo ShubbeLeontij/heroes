@@ -380,6 +380,7 @@ def test_map_gestures(browser):
     try:
         browser.screen(390, 844)
         browser.open(f"http://127.0.0.1:{network.server.port}/")
+        browser.wait_for("window.app")
         browser.evaluate(f"app.handle({json.dumps(recorder.sync)}); app.handle({json.dumps(recorder.decision)}); 1")
         browser.wait_for("app.map.geometry && app.panel && app.panel.options")
         options = recorder.decision["data"]["options"]
@@ -516,6 +517,51 @@ def test_splitters(browser):
         assert browser.evaluate("localStorage.getItem('heroes.split.x') === null && localStorage.getItem('heroes.split.y') === null")
         browser.screen(390, 844)
         assert browser.evaluate("getComputedStyle(document.getElementById('split-x')).display") == "none"
+        assert not browser.errors, browser.errors
+    finally:
+        network.server.close()
+        browser.screen(390, 844)
+
+
+class MoveAheadRecorder(RandomBot):
+    """Бот, который на первом решении раунда, где перемещение ещё впереди, запоминает, что увидела бы страница."""
+
+    def decide(self, decision, view):
+        st = view.game.state
+        if st.phase >= 1 and "move" in st.action_order and st.phase < st.action_order.index("move") + 1:
+            from heroes.protocol.snapshot import sync_message
+            self.sync = sync_message(view.game, 0)
+            raise Stop
+        return super().decide(decision, view)
+
+
+def test_move_chip_previews_reach(browser):
+    """Широкий экран: наведение на коня в полосе раунда (перемещение ещё впереди) обводит на карте, куда дойдёт
+    игрок, чей планшет открыт; мышь ушла — обводки нет."""
+    recorder = MoveAheadRecorder(1)
+    with pytest.raises(Stop):
+        Game([recorder, RandomBot(2)]).run()
+    state = recorder.sync["state"]
+    network = cli.Network(0, "secret", log_fn=lambda text: None)
+    network.seat("Гость")
+    network.server.start()
+    chip = """(() => { const c = [...document.querySelectorAll('#phases .chip')].find((c) => c.querySelector('.ic-move'));
+        const r = c.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()"""
+    shown = "JSON.stringify(app.map.shownOptions() && Object.keys(app.map.shownOptions()).sort())"
+    try:
+        browser.screen(1400, 900, mobile=False)
+        browser.open(f"http://127.0.0.1:{network.server.port}/")
+        browser.wait_for("window.app")
+        browser.evaluate(f"app.handle({json.dumps(recorder.sync)}); 1")
+        browser.wait_for("!!app.map.geometry")
+        assert json.loads(browser.evaluate(shown)) is None
+        x, y = browser.evaluate(chip)
+        for seat in (0, 1):
+            browser.evaluate(f"app.openBoard({seat}); 1")
+            browser.call("Input.dispatchMouseEvent", type="mouseMoved", x=x, y=y)
+            assert json.loads(browser.evaluate(shown)) == sorted(state["upcoming_reach"][str(seat)]), seat
+            browser.call("Input.dispatchMouseEvent", type="mouseMoved", x=x, y=y + 300)
+            assert json.loads(browser.evaluate(shown)) is None
         assert not browser.errors, browser.errors
     finally:
         network.server.close()
