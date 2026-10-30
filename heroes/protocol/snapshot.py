@@ -122,7 +122,11 @@ def static_data(game: Game) -> dict:
             "artifacts_board": {region: a.text_board or a.text_ru or a.text for region, a in f.artifacts.items()},
             # свойства фракции (блоки планшета, не здания) и её особенности
             "rules": {r.id: {"name": r.name, "text": r.text, "text_ru": r.text_ru or r.text,
-                             "text_board": r.text_board or r.text_ru or r.text} for r in f.rules.values()},
+                             "text_board": r.text_board or r.text_ru or r.text,
+                             # модификация войск за ресурс (орки): цены, которых нет в тексте свойства
+                             "unit_upgrades": [{"from": x["from"], "to": x["to"], "cost": dict(x["cost"])}
+                                               for e in r.effects if e["type"] == "upgrade_units_on_build" for x in e["paths"]]}
+                      for r in f.rules.values()},
             "monsters": [{"strength": m.strength, "vp": m.vp, "loot": dict(m.loot)} for m in f.monsters]
             if f.monsters else None,   # своя линия чудовищ (наги) вместо общей
             "artifact_conditions": dict(f.artifact_conditions),   # свои условия артефактов (наги)
