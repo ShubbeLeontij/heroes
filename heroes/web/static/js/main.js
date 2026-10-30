@@ -37,6 +37,58 @@ const session = {
 
 const $ = (id) => document.getElementById(id);
 
+// Разделительные черты широкого экрана (index.html, .splitter): тянутся мышью, двойной щелчок — как было.
+// Положение — доля #main, запоминается в браузере; наименьшие размеры частей — в пикселях.
+const SPLITS = {
+  "split-x": { key: "heroes.split.x", rows: false, min: 300, rest: 360,   // ширина карты; планшетам — не уже 360px (style.css)
+    props: (share) => ({ "--map-fr": `${share}fr`, "--boards-fr": `${100 - share}fr` }) },
+  "split-y": { key: "heroes.split.y", rows: true, min: 100, rest: 120,    // высота решения; карте — не ниже 120px
+    props: (share) => ({ "--decision-min": "100px", "--decision-h": `${share}%` }) },
+};
+
+function setupSplitters() {
+  const main = $("main");
+  for (const [id, split] of Object.entries(SPLITS)) {
+    const bar = $(id);
+    const apply = (share) => {
+      for (const [prop, value] of Object.entries(split.props(share ?? 50))) {
+        if (share === null) main.style.removeProperty(prop);
+        else main.style.setProperty(prop, value);
+      }
+    };
+    const saved = Number(store.get(split.key));
+    if (saved > 0 && saved < 100) apply(saved);
+    const done = (e) => {
+      if (!bar.hasPointerCapture(e.pointerId)) return;
+      bar.releasePointerCapture(e.pointerId);
+      bar.classList.remove("dragging");
+      document.body.classList.remove("splitting", "rows");
+    };
+    bar.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      bar.setPointerCapture(e.pointerId);
+      bar.classList.add("dragging");
+      document.body.classList.add("splitting", ...(split.rows ? ["rows"] : []));
+    });
+    bar.addEventListener("pointermove", (e) => {
+      if (!bar.hasPointerCapture(e.pointerId)) return;
+      const r = main.getBoundingClientRect(), size = split.rows ? r.height : r.width;
+      const at = split.rows ? r.bottom - e.clientY : e.clientX - r.left;
+      const px = Math.max(split.min, Math.min(size - split.rest, at));
+      const share = Math.round(px / size * 1000) / 10;
+      apply(share);
+      store.set(split.key, share);
+    });
+    bar.addEventListener("pointerup", done);
+    bar.addEventListener("pointercancel", done);
+    bar.addEventListener("dblclick", () => {
+      apply(null);
+      store.set(split.key, null);
+    });
+  }
+}
+
 class App {
   constructor() {
     this.static = null;
@@ -71,6 +123,7 @@ class App {
       if (this.viewer !== null && this.boardPlayer !== this.viewer) this.openBoard(this.viewer);
       this.setView(b.dataset.view);
     });
+    setupSplitters();
     $("log-toggle").addEventListener("click", () => this.toggleLog());
     $("log-close").addEventListener("click", () => this.toggleLog(false));
     $("join-watch").addEventListener("click", () => this.join(true));

@@ -270,6 +270,7 @@ body:not([data-view="decision"]) #decision-pane,
 body:not([data-view="boards"]) #boards-pane,
 body:not([data-view="log"]) #log-pane { visibility: hidden; pointer-events: none; }
 #board-tabs { display: none; }   /* на телефоне вкладки планшетов — в нижней полосе */
+.splitter { display: none; }     /* разделительные черты тянутся только на широком экране */
 #log-toggle, .log-head button { display: none; }
 #order .upcoming { display: none; }
 
@@ -306,14 +307,26 @@ body:not([data-view="log"]) #log-pane { visibility: hidden; pointer-events: none
   #board-tabs { display: flex; }
   #log-toggle { display: inline-block; }
   #order .upcoming { display: inline; }
+  /* доли колонок и высоту решения задают перетянутые черты (main.js, splitters); без них — как было */
   #main {
-    grid-template-columns: minmax(0, 62fr) minmax(360px, 38fr);
-    grid-template-rows: 1fr minmax(240px, 36%);
+    grid-template-columns: minmax(0, var(--map-fr, 62fr)) minmax(360px, var(--boards-fr, 38fr));
+    grid-template-rows: 1fr minmax(var(--decision-min, 240px), var(--decision-h, 36%));
     grid-template-areas: "map boards" "decision boards";
     gap: 1px;
     background: var(--line);
   }
-  body[data-view] #main { grid-template-columns: minmax(0, 62fr) minmax(360px, 38fr); grid-template-rows: 1fr minmax(240px, 36%); }
+  body[data-view] #main {
+    grid-template-columns: minmax(0, var(--map-fr, 62fr)) minmax(360px, var(--boards-fr, 38fr));
+    grid-template-rows: 1fr minmax(var(--decision-min, 240px), var(--decision-h, 36%));
+  }
+  /* полоса для мыши поверх черты в 1px: черта — на её середине */
+  .splitter { display: block; position: relative; z-index: 2; touch-action: none; }
+  #split-x { grid-column: 2; grid-row: 1 / -1; justify-self: start; width: 9px; margin-left: -5px; cursor: col-resize; }
+  #split-y { grid-column: 1; grid-row: 2; align-self: start; height: 9px; margin-top: -5px; cursor: row-resize; }
+  .splitter:hover, .splitter.dragging { background: linear-gradient(var(--accent), var(--accent)) center / 3px 100% no-repeat; }
+  #split-y:hover, #split-y.dragging { background-size: 100% 3px; }
+  body.splitting { cursor: col-resize; user-select: none; }
+  body.splitting.rows { cursor: row-resize; }
   #decision-pane { grid-area: decision; }
   #boards-pane { grid-area: boards; }
   /* #game — чтобы перебить правила «видна только открытая вкладка» телефонной раскладки */
