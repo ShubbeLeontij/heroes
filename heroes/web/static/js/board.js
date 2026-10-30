@@ -141,9 +141,9 @@ export class BoardView {
     return out.childNodes.length ? out : null;
   }
 
-  // свойства фракции — блоки планшета, которые действуют всю партию
+  // свойства фракции — блоки планшета, которые действуют всю партию (кроме тех, что уже показывает склад)
   rules(faction) {
-    const rules = Object.values(faction.rules || {});
+    const rules = Object.values(faction.rules || {}).filter((rule) => !rule.in_stock);
     if (!rules.length) return null;
     return h("section", h("h3", "Свойства фракции"),
       rules.map((rule) => h("div.card.rule", h("b", rule.name), h("p", markup(rule.text_board)),

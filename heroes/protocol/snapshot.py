@@ -125,7 +125,9 @@ def static_data(game: Game) -> dict:
                              "text_board": r.text_board or r.text_ru or r.text,
                              # модификация войск за ресурс (орки): цены, которых нет в тексте свойства
                              "unit_upgrades": [{"from": x["from"], "to": x["to"], "cost": dict(x["cost"])}
-                                               for e in r.effects if e["type"] == "upgrade_units_on_build" for x in e["paths"]]}
+                                               for e in r.effects if e["type"] == "upgrade_units_on_build" for x in e["paths"]],
+                             # только пороги ПО уникального ресурса (ярость орков): их показывает склад
+                             "in_stock": all(e["type"] == "faction_resource" for e in r.effects)}
                       for r in f.rules.values()},
             "monsters": [{"strength": m.strength, "vp": m.vp, "loot": dict(m.loot)} for m in f.monsters]
             if f.monsters else None,   # своя линия чудовищ (наги) вместо общей
