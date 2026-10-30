@@ -454,6 +454,74 @@ def test_map_popup_icons(browser):
         network.server.close()
 
 
+def test_splitters(browser):
+    """Широкий экран: разделительные черты тянутся мышью (не дальше наименьших размеров частей), положение
+    запоминается и после перезагрузки, двойной щелчок возвращает как было. На телефоне черт нет."""
+    recorder = DestinationRecorder(1)
+    with pytest.raises(Stop):
+        Game([recorder, RandomBot(2)]).run()
+    network = cli.Network(0, "secret", log_fn=lambda text: None)
+    network.seat("Гость")
+    network.server.start()
+    url = f"http://127.0.0.1:{network.server.port}/"
+    rect = """(() => {{ const r = document.getElementById({!r}).getBoundingClientRect();
+        return [r.left, r.top, r.width, r.height]; }})()""".format
+    show = f"app.handle({json.dumps(recorder.sync)}); 1"
+
+    def mouse(kind, x, y, clicks=1):
+        browser.call("Input.dispatchMouseEvent", type=kind, x=x, y=y, button="left", buttons=0 if kind == "mouseReleased" else 1,
+                     clickCount=clicks)
+
+    def drag(splitter, dx, dy):
+        x, y, w, hh = browser.evaluate(rect(splitter))
+        x, y = x + w / 2, y + hh / 2
+        mouse("mousePressed", x, y)
+        for step in range(1, 6):
+            mouse("mouseMoved", x + dx * step / 5, y + dy * step / 5)
+        mouse("mouseReleased", x + dx, y + dy)
+
+    try:
+        browser.screen(1400, 900, mobile=False)
+        browser.open(url)
+        browser.wait_for("window.app")
+        browser.evaluate("localStorage.removeItem('heroes.split.x'); localStorage.removeItem('heroes.split.y'); 1")
+        browser.evaluate(show)
+        browser.wait_for("app.map.geometry")
+        _, _, map_w, map_h = browser.evaluate(rect("map-pane"))
+        _, _, _, decision_h = browser.evaluate(rect("decision-pane"))
+        drag("split-x", -200, 0)   # карта уже
+        drag("split-y", 0, -100)   # решение выше
+        _, _, w, hh = browser.evaluate(rect("map-pane"))
+        assert abs(w - (map_w - 200)) < 3 and abs(hh - (map_h - 100)) < 3, (w, hh)
+        assert abs(browser.evaluate(rect("decision-pane"))[3] - (decision_h + 100)) < 3
+        x, _, split_w, _ = browser.evaluate(rect("split-x"))
+        assert abs(x + split_w / 2 - (browser.evaluate(rect("map-pane"))[0] + w)) < 2   # полоса — на черте
+        # перезагрузка — черты там же
+        browser.open(url)
+        browser.wait_for("window.app")
+        browser.evaluate(show)
+        assert abs(browser.evaluate(rect("map-pane"))[2] - w) < 3
+        # не дальше наименьших размеров: планшетам остаётся 360px
+        drag("split-x", 2000, 0)
+        assert abs(browser.evaluate(rect("boards-pane"))[2] - 360) < 3
+        # двойной щелчок — как было
+        for splitter in ("split-x", "split-y"):
+            x, y, sw, sh = browser.evaluate(rect(splitter))
+            mouse("mousePressed", x + sw / 2, y + sh / 2)
+            mouse("mouseReleased", x + sw / 2, y + sh / 2)
+            mouse("mousePressed", x + sw / 2, y + sh / 2, 2)
+            mouse("mouseReleased", x + sw / 2, y + sh / 2, 2)
+        _, _, w, hh = browser.evaluate(rect("map-pane"))
+        assert abs(w - map_w) < 3 and abs(hh - map_h) < 3, (w, hh)
+        assert browser.evaluate("localStorage.getItem('heroes.split.x') === null && localStorage.getItem('heroes.split.y') === null")
+        browser.screen(390, 844)
+        assert browser.evaluate("getComputedStyle(document.getElementById('split-x')).display") == "none"
+        assert not browser.errors, browser.errors
+    finally:
+        network.server.close()
+        browser.screen(390, 844)
+
+
 def test_tips(browser):
     """Подсказки: наведение мышью на артефакт, чудовище и склад планшета — полная информация по всем игрокам;
     на телефоне — по тапу (и по рисунку артефакта на карте); тап мимо — подсказка закрывается."""
