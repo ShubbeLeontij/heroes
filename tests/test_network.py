@@ -114,6 +114,22 @@ def test_wizard_asks_everything_the_new_game_window_did(monkeypatch, tmp_path):
     assert "  That name is taken" in out and any("That faction is taken" in line for line in out)
 
 
+def test_wizard_random_first_shuffles_seats(monkeypatch):
+    """«Кто первый? — случайно»: места перемешиваются вместе с типом, именем и фракцией; первым ходит место 0,
+    итоговый состав — уже в новом порядке."""
+    monkeypatch.setattr(cli.random, "shuffle", lambda seats: seats.reverse())
+    answers = iter(["2",
+                    "1", "Аня", "4",      # человек, орки
+                    "3", "Бот", "",       # бот, случайная фракция
+                    "", "",               # порт и пароль
+                    "3",                  # первый — случайно
+                    ""])
+    out = []
+    kinds, names, factions, first, model = cli.setup_wizard(args(), lambda prompt: next(answers), out.append)
+    assert (kinds, names, factions, first) == (["bot", "human"], ["Бот", "Аня"], ["random", "orcs"], 0)
+    assert any(line.startswith("  1. Бот") and line.endswith("goes first") for line in out)
+
+
 def test_wizard_can_be_cancelled():
     answers = iter(["2", "3", "", "", "3", "", "", "", "n"])
     assert cli.setup_wizard(args(), lambda prompt: next(answers), lambda text: None) is None
@@ -131,12 +147,24 @@ def test_join_links_and_first_player_flag(monkeypatch):
 
     monkeypatch.setattr(cli, "Game", FakeGame)
     with contextlib.redirect_stdout(io.StringIO()):
-        for first in ("random", "1"):
+        try:
+            cli.main(["--players", "bot,bot", "--first", "1", "--autosave", ""])
+        except SystemExit as e:
+            assert str(e) == "stop"
+        assert started["first_player"] == 1 and started["names"] == ["Bot 1", "Bot 2"]
+        # случайный первый игрок — и случайная рассадка: имя и фракция едут вместе с местом, первым ходит место 0
+        orders = set()
+        for _ in range(40):
             try:
-                cli.main(["--players", "bot,bot", "--first", first, "--autosave", ""])
+                cli.main(["--players", "bot,bot,bot", "--names", "А,Б,В", "--factions", "orcs,elves,nagas",
+                          "--first", "random", "--autosave", ""])
             except SystemExit as e:
                 assert str(e) == "stop"
-            assert started["first_player"] in (0, 1)
+            assert started["first_player"] == 0
+            seats = list(zip(started["names"], started["factions"]))
+            assert sorted(seats) == [("А", "orcs"), ("Б", "elves"), ("В", "nagas")]
+            orders.add(tuple(started["names"]))
+        assert len(orders) > 1
         try:
             cli.main(["--players", "bot,bot", "--first", "5"])
         except SystemExit as e:

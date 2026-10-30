@@ -71,6 +71,14 @@ def resolve_factions(choices: list[str], rng: random.Random | None = None) -> li
     return [free.pop() if f == RANDOM else f for f in choices]
 
 
+def shuffle_seats(kinds: list[str], names: list[str], factions: list[str]) -> tuple[list[str], list[str], list[str]]:
+    """Случайный первый игрок — и случайная рассадка: места перемешиваются вместе с типом, именем и фракцией,
+    первым ходит место 0."""
+    seats = list(zip(kinds, names, factions))
+    random.shuffle(seats)
+    return [k for k, _, _ in seats], [n for _, n, _ in seats], [f for _, _, f in seats]
+
+
 def print_thought(name: str, kind: str, comment: str) -> None:
     print(f"💭 {name} [{kind}]: {comment}")
 
@@ -128,7 +136,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("--names", help="comma-separated player names (a human joins the game with their name)")
     ap.add_argument("--factions", help=f"comma-separated factions in seat order: {', '.join(FACTIONS)} or {RANDOM} "
                                        f"(default: {RANDOM} for everyone; a faction can be played by one player only)")
-    ap.add_argument("--first", default="0", help=f"first player's number (from 0) or {RANDOM}, with --players")
+    ap.add_argument("--first", default="0", help=f"first player's number (from 0) or {RANDOM} (also shuffles the seats), "
+                                                 "with --players")
     ap.add_argument("--seed", type=int, help="seed for random bots")
     ap.add_argument("--load", metavar="FILE", help="continue a saved game")
     ap.add_argument("--continue", dest="resume", action="store_true", help="continue the most recent saved game")
@@ -172,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
             factions = [f.strip() for f in args.factions.split(",")] if args.factions else [RANDOM] * len(kinds)
             model = args.model or DEFAULT_MODEL
             if args.first == RANDOM:
-                first = random.randrange(len(kinds))
+                first = None   # рассадка перемешивается после проверок: первым — место 0
             elif args.first.isdigit() and int(args.first) < len(kinds):
                 first = int(args.first)
             else:
@@ -199,6 +208,9 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("Player names must be non-empty and distinct")
         if len(factions) != len(kinds):
             raise SystemExit("The number of factions must match the number of players")
+        if first is None:
+            kinds, names, factions = shuffle_seats(kinds, names, factions)
+            first = 0
         try:
             factions = resolve_factions(factions)
         except ValueError as e:
@@ -489,9 +501,12 @@ def setup_wizard(args: argparse.Namespace, input_fn: Callable[[str], str] = inpu
         args.password = input_fn("Game password (Enter — none) " + (f"[{args.password}] " if args.password else "")).strip() \
             or args.password
     output_fn("Who goes first? " + ", ".join(f"{i} — {name}" for i, name in enumerate(names, 1))
-              + f", {n + 1} — random")
+              + f", {n + 1} — random (the seats are shuffled too)")
     choice = ask("First player:", names + ["random"], n + 1)
-    first = random.randrange(n) if choice == n + 1 else choice - 1
+    first = choice - 1
+    if choice == n + 1:
+        kinds, names, factions = shuffle_seats(kinds, names, factions)
+        first = 0
 
     output_fn("\nPlayers (clockwise):")
     for i, (kind, name, faction) in enumerate(zip(kinds, names, factions)):
