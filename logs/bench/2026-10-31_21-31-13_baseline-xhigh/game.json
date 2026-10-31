@@ -1,0 +1,390 @@
+{
+ "version": 3,
+ "meta": {
+  "players": [
+   "claude",
+   "bot",
+   "bot",
+   "bot"
+  ],
+  "seed": 1,
+  "bench": "baseline-xhigh",
+  "claude": {
+   "model": "claude-opus-5-5",
+   "effort": "xhigh",
+   "tools": true
+  },
+  "game_id": "5b1c6497bd0a44d8a4f485946dec45eb",
+  "claude_sessions": {
+   "0": "29c29fcd-3144-4c31-98fb-cc0bbddf25b0"
+  }
+ },
+ "names": [
+  "Claude",
+  "Bot 1",
+  "Bot 2",
+  "Bot 3"
+ ],
+ "factions": [
+  "humans",
+  "dwarves",
+  "undead",
+  "nagas"
+ ],
+ "first_player": 0,
+ "history": [
+  {
+   "round": 0,
+   "player": 3,
+   "kind": "choose_start",
+   "answer": "Карракс"
+  },
+  {
+   "round": 0,
+   "player": 2,
+   "kind": "choose_start",
+   "answer": "Вернесс"
+  },
+  {
+   "round": 0,
+   "player": 1,
+   "kind": "choose_start",
+   "answer": "Оррид"
+  },
+  {
+   "round": 0,
+   "player": 1,
+   "kind": "distribute_resources",
+   "answer": {
+    "wood": 2,
+    "iron": 0,
+    "gold": 0
+   }
+  },
+  {
+   "round": 1,
+   "player": 0,
+   "kind": "action_order",
+   "answer": [
+    "iron",
+    "wood",
+    "move",
+    "build"
+   ]
+  },
+  {
+   "round": 1,
+   "player": 0,
+   "kind": "destination",
+   "answer": "Улин"
+  },
+  {
+   "round": 1,
+   "player": 1,
+   "kind": "destination",
+   "answer": "Цурт"
+  },
+  {
+   "round": 1,
+   "player": 2,
+   "kind": "destination",
+   "answer": "Чарил"
+  },
+  {
+   "round": 1,
+   "player": 3,
+   "kind": "destination",
+   "answer": "Оррид"
+  },
+  {
+   "round": 1,
+   "player": 3,
+   "kind": "distribute_resources",
+   "answer": {
+    "wood": 1,
+    "iron": 0,
+    "gold": 1
+   }
+  },
+  {
+   "round": 1,
+   "player": 0,
+   "kind": "fight_monster",
+   "answer": {
+    "monster": 1,
+    "army": {
+     "soldier": 2
+    }
+   }
+  },
+  {
+   "round": 1,
+   "player": 0,
+   "kind": "distribute_resources",
+   "answer": {
+    "wood": 0,
+    "iron": 2,
+    "gold": 0
+   }
+  },
+  {
+   "round": 1,
+   "player": 1,
+   "kind": "fight_monster",
+   "answer": {
+    "monster": 1,
+    "army": {
+     "flyer": 2
+    }
+   }
+  },
+  {
+   "round": 1,
+   "player": 1,
+   "kind": "distribute_resources",
+   "answer": {
+    "wood": 0,
+    "iron": 1,
+    "gold": 1
+   }
+  },
+  {
+   "round": 1,
+   "player": 2,
+   "kind": "fight_monster",
+   "answer": null
+  },
+  {
+   "round": 1,
+   "player": 3,
+   "kind": "fight_monster",
+   "answer": {
+    "monster": 0,
+    "army": {
+     "krak": 2
+    }
+   }
+  },
+  {
+   "round": 1,
+   "player": 3,
+   "kind": "distribute_resources",
+   "answer": {
+    "wood": 2,
+    "iron": 0,
+    "gold": 0
+   }
+  },
+  {
+   "round": 1,
+   "player": 0,
+   "kind": "build_recruit",
+   "answer": [
+    {
+     "build": "town_hall"
+    },
+    "done"
+   ]
+  },
+  {
+   "round": 1,
+   "player": 1,
+   "kind": "build_recruit",
+   "answer": [
+    {
+     "build": "academy"
+    }
+   ]
+  },
+  {
+   "round": 1,
+   "player": 2,
+   "kind": "build_recruit",
+   "answer": [
+    "done"
+   ]
+  },
+  {
+   "round": 2,
+   "player": 1,
+   "kind": "action_order",
+   "answer": [
+    "iron",
+    "move",
+    "gold",
+    "build"
+   ]
+  },
+  {
+   "round": 2,
+   "player": 1,
+   "kind": "destination",
+   "answer": "Яскер"
+  },
+  {
+   "round": 2,
+   "player": 2,
+   "kind": "destination",
+   "answer": "Эльри"
+  },
+  {
+   "round": 2,
+   "player": 3,
+   "kind": "destination",
+   "answer": "Вернесс"
+  },
+  {
+   "round": 2,
+   "player": 0,
+   "kind": "destination",
+   "answer": "Яскер"
+  },
+  {
+   "round": 2,
+   "player": 0,
+   "kind": "distribute_resources",
+   "answer": {
+    "wood": 0,
+    "iron": 1,
+    "gold": 0
+   }
+  },
+  {
+   "round": 2,
+   "player": 1,
+   "kind": "region_stance",
+   "answer": "pass"
+  },
+  {
+   "round": 2,
+   "player": 0,
+   "kind": "region_stance",
+   "answer": "pass"
+  },
+  {
+   "round": 2,
+   "player": 2,
+   "kind": "fight_monster",
+   "answer": {
+    "monster": 0,
+    "army": {
+     "skeleton": 3
+    }
+   }
+  },
+  {
+   "round": 2,
+   "player": 1,
+   "kind": "build_recruit",
+   "answer": [
+    {
+     "hire": {
+      "mechanic": 2
+     }
+    },
+    {
+     "hire": {
+      "mechanic": 1
+     }
+    }
+   ]
+  },
+  {
+   "round": 2,
+   "player": 1,
+   "kind": "build_recruit",
+   "answer": [
+    "done"
+   ]
+  },
+  {
+   "round": 2,
+   "player": 2,
+   "kind": "build_recruit",
+   "answer": [
+    "done"
+   ]
+  },
+  {
+   "round": 2,
+   "player": 3,
+   "kind": "build_recruit",
+   "answer": [
+    {
+     "build": "mine"
+    }
+   ]
+  },
+  {
+   "round": 2,
+   "player": 0,
+   "kind": "build_recruit",
+   "answer": [
+    {
+     "build": "illusion_tower"
+    },
+    "done"
+   ]
+  },
+  {
+   "round": 3,
+   "player": 2,
+   "kind": "action_order",
+   "answer": [
+    "move",
+    "gold",
+    "build",
+    "wood"
+   ]
+  },
+  {
+   "round": 3,
+   "player": 3,
+   "kind": "destination",
+   "answer": "Вернесс"
+  },
+  {
+   "round": 3,
+   "player": 0,
+   "kind": "destination",
+   "answer": "Юноро"
+  },
+  {
+   "round": 3,
+   "player": 1,
+   "kind": "destination",
+   "answer": "Яскер"
+  },
+  {
+   "round": 3,
+   "player": 0,
+   "kind": "distribute_resources",
+   "answer": {
+    "wood": 0,
+    "iron": 1,
+    "gold": 0
+   }
+  },
+  {
+   "round": 3,
+   "player": 2,
+   "kind": "build_recruit",
+   "answer": [
+    {
+     "build": "hearse"
+    }
+   ]
+  },
+  {
+   "round": 3,
+   "player": 1,
+   "kind": "build_recruit",
+   "answer": [
+    {
+     "build": "library"
+    },
+    "done"
+   ]
+  }
+ ]
+}

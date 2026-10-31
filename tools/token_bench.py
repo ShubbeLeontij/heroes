@@ -175,12 +175,12 @@ def compare() -> int:
         print(f"No runs in {BENCH_DIR.relative_to(ROOT)}/")
         return 0
     print(f"{'run':40} {'git':>9} {'effort':>6} {'rnd':>3} {'calls':>5} {'output':>9} {'thinking':>9} "
-          f"{'out/call':>8} {'input':>11} {'$':>6} {'min':>5}")
+          f"{'out/call':>8} {'input':>11} {'tools':>5} {'$':>6} {'min':>5}")
     for name, s in runs:
         t = s["totals"]
         head = s["git"]["head"] + ("*" if s["git"]["dirty"] else "")
         print(f"{name[:40]:40} {head:>9} {s['effort']:>6} {s['rounds_played']:3} {t['calls']:5} {t['output']:9,} "
-              f"{t['thinking']:9,} {t['output'] // max(t['calls'], 1):8,} {t['input']:11,} {t['cost_usd']:6.2f} "
+              f"{t['thinking']:9,} {t['output'] // max(t['calls'], 1):8,} {t['input']:11,} {t['tools']:5} {t['cost_usd']:6.2f} "
               f"{s['wall_seconds'] / 60:5.1f}")
     print("\n* — uncommitted changes in heroes/ or docs/ (see prompt.diff of the run)")
     return 0
