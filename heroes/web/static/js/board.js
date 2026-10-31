@@ -3,12 +3,10 @@
 // планшете, со стрелками зависимостей; на узком — по две в ряд, а вместо стрелок подписано, какое здание нужно.
 
 import { UI, artifactMark, h, mark, markup, rich } from "./rich.js";
-import { artifactCondition, color, CONDITION_MARKS, conditionIcons, monsterLine, nameOf, res, reward } from "./common.js";
+import { artifactCondition, color, CONDITION_MARKS, conditionIcons, monsterLine, nameOf, res, reward, SCORE_CATEGORIES, scoreHeads } from "./common.js";
 import { tipAttr } from "./tips.js";
 
 const WIDE_COLUMN = 128;     // уже — колонки печатного планшета не помещаются: карточки по две в ряд
-const CATEGORIES = { buildings: "здания", foundations: "фундаменты", resources: "склад", battles: "сражения", artifacts: "артефакты" };
-const CATEGORY_MARKS = { foundations: "foundation", battles: "victory", artifacts: "artifact" };   // остальные — словом
 const picture = (kind) => `assets/icons/${encodeURIComponent(kind)}_64.png`;
 
 // почему войско пока нельзя нанять: какое здание нужно
@@ -460,8 +458,8 @@ export function playersSummary(static_, state, you, onOpen) {
         return [pl.region || "—", ...["wood", "iron", "gold"].map((k) => String(pl.resources[k])), units || "нет", String(pl.army_strength),
           ...(special ? [specialsCell(static_, state, p)] : [])];
       }),
-    table("Победные очки", [...Object.entries(CATEGORIES).map(([k, t]) => h("th", { title: t }, k in CATEGORY_MARKS ? mark(CATEGORY_MARKS[k]) : t[0].toUpperCase() + t.slice(1))), h("th", mark("laurel"))],
-      (pl) => [...Object.keys(CATEGORIES).map((k) => String(pl.score[k])), h("b", String(pl.score.total))]),
+    table("Победные очки", [...scoreHeads(), h("th", mark("laurel"))],
+      (pl) => [...Object.keys(SCORE_CATEGORIES).map((k) => String(pl.score[k])), h("b", String(pl.score.total))]),
     table("Здания по уровням", [1, 2, 3, 4].map((lvl) => h("th", UI.levels[lvl])), (pl) => {
       const faction = static_.factions[pl.faction];
       return [1, 2, 3, 4].map((lvl) => pl.built.filter((b) => faction.buildings[b].level === lvl).map((b) => faction.buildings[b].name).join(", ") || "—");

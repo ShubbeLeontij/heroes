@@ -12,6 +12,7 @@
   {"game_id", "date", "you": номер места, "save": путь к сохранению доигранной партии (saves/final/…) или null,
    "players": [{"name", "kind", "faction", "faction_name",
    "turn": место в очерёдности (1 — первый игрок первого раунда), "vp", "score", "winner", "profile"}, …]}
+Партии, сыгранные оффлайн и внесённые вручную, — без порядка ходов и разбивки ПО: "turn": null, "score": {"total"}.
 """
 from __future__ import annotations
 

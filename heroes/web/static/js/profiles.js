@@ -2,6 +2,7 @@
 // и доигранные партии, по карточке на каждую. Запросы — POST /profiles (heroes/net/web.py: profile_request).
 // Партия попадает в профиль игрока с тем же именем после подсчёта очков; профиля нет — хозяин заводит его сам.
 
+import { SCORE_CATEGORIES, scoreHeads } from "./common.js";
 import { h, mark } from "./rich.js";
 
 const MAX_AVATAR = 300_000;   // heroes/profiles.py: MAX_AVATAR (base64)
@@ -231,11 +232,12 @@ export class ProfilesScreen {
       games.length > MAX_CARDS ? h("p.muted", `Показаны последние ${MAX_CARDS} партий из ${games.length}.`) : null);
   }
 
-  // Карточка партии: дата, итог; строки — вы и соперники: аватарка, имя, фракция, номер хода, ПО
+  // Карточка партии: дата, итог; строки — вы и соперники: аватарка, имя, фракция, номер хода, ПО по категориям и всего
+  // (у партий, сыгранных оффлайн, — только «всего»)
   gameCard(game, known) {
     const players = game.players;
     const [place, cls] = placeText(game);
-    const order = [game.you, ...players.map((_, p) => p).filter((p) => p !== game.you).sort((a, b) => players[a].turn - players[b].turn)];
+    const order = [game.you, ...players.map((_, p) => p).filter((p) => p !== game.you).sort((a, b) => (players[a].turn ?? 0) - (players[b].turn ?? 0))];
     const rows = order.map((p) => {
       const pl = players[p], you = p === game.you;
       const own = known[pl.profile]?.avatar;
@@ -244,14 +246,15 @@ export class ProfilesScreen {
         h("td", h("img.row-avatar", { src: own ? png(own) : `assets/avatars/${kind}_${p % 4}.png`, alt: "" })),
         h("td", pl.name + (you ? " (вы)" : "")),
         h("td", pl.faction_name),
-        h("td", String(pl.turn)),
-        h("td", String(pl.vp)),
+        h("td", pl.turn == null ? "—" : String(pl.turn)),   // партии, сыгранные оффлайн, — без порядка ходов
+        Object.keys(SCORE_CATEGORIES).map((k) => h("td", pl.score?.[k] == null ? "—" : String(pl.score[k]))),
+        h("td", h("b", String(pl.vp))),
         h("td.good", pl.winner ? "★ победа" : ""));
     });
     return h("div.game-card",
       h("div.game-card-head", h("span.muted", `${dateText(game.date)} · игроков: ${players.length}`), h(`b.${cls}`, place)),
       h("table.game-table",
-        h("thead", h("tr", ["", "Игрок", "Фракция", "Номер хода", mark("laurel"), ""].map((t) => h("th", t)))),
+        h("thead", h("tr", ["", "Игрок", "Фракция", "Номер хода"].map((t) => h("th", t)), scoreHeads(), ["laurel", ""].map((t) => h("th", t && mark(t))))),
         h("tbody", rows)));
   }
 }

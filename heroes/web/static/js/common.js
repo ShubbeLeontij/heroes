@@ -2,7 +2,7 @@
 // (повторяет effects.army_strength движка). Страница работает только с данными снимков
 // (static и state из heroes/protocol/snapshot.py), без движка.
 
-import { UI, artifactMark, mark } from "./rich.js";
+import { UI, artifactMark, h, icon, mark } from "./rich.js";
 
 export const color = (p) => (p === null || p === undefined ? "var(--muted)" : UI.colors[p % UI.colors.length]);
 
@@ -21,6 +21,16 @@ export function plural(n, one, few, many) {
   if (n % 10 === 1 && n % 100 !== 11) return one;
   if (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14)) return few;
   return many;
+}
+
+// победные очки по категориям (heroes/scoring.py): заголовок — значком (склад — ресурсы треугольником:
+// дерево сверху, железо слева, золото справа), title — словом
+export const SCORE_CATEGORIES = { buildings: "здания", foundations: "фундаменты", resources: "склад", battles: "сражения", artifacts: "артефакты" };
+const SCORE_MARKS = { buildings: "build", foundations: "foundation", battles: "victory", artifacts: "artifact" };
+
+export function scoreHeads() {
+  return Object.entries(SCORE_CATEGORIES).map(([k, t]) =>
+    h("th", { title: t }, k === "resources" ? h("span.res-triangle", ["wood", "iron", "gold"].map((r) => icon(r))) : mark(SCORE_MARKS[k])));
 }
 
 // условие артефакта значками, как на планшете: цена или сколько нужно фундаментов, побед, гор
