@@ -3,6 +3,7 @@
 
     .venv/bin/python tools/token_bench.py --label baseline          # прогон
     .venv/bin/python tools/token_bench.py --compare                 # все прогоны рядом
+    .venv/bin/python tools/token_bench.py --compare baseline-high baseline --metric output   # выбранные прогоны
 
 Прогон ничего не меняет в strategy/ (заметки, скрипты, results.csv, журнал путаницы) и не пишет в saves/:
 после обрезанной партии нет ни разбора, ни подсчёта очков. Всё складывается в logs/bench/<время>_<метка>/:
@@ -166,23 +167,89 @@ def run(args: argparse.Namespace) -> int:
     return 130 if interrupted else 1 if error else 0
 
 
-def compare() -> int:
+METRICS = {"thinking": "thinking tokens", "output": "output tokens", "cost": "cost, $", "seconds": "seconds"}
+
+
+def load_runs(select: list[str], last: int | None) -> list[tuple[str, dict, list[dict]]]:
+    """Прогоны из logs/bench/ по порядку времени; select — метки или части имени папки (пусто — все):
+    если у какого-то прогона метка совпадает точно, берётся только он, иначе — все, у кого это часть имени папки.
+    last — только последние N из отобранных."""
+    paths = sorted(BENCH_DIR.glob("*/summary.json"))
+    summaries = {path: json.loads(path.read_text(encoding="utf-8")) for path in paths}
+    labels = {s.get("label") for s in summaries.values()}
     runs = []
-    for path in sorted(BENCH_DIR.glob("*/summary.json")):
-        s = json.loads(path.read_text(encoding="utf-8"))
-        runs.append((path.parent.name, s))
+    for path, s in summaries.items():
+        name = path.parent.name
+        if select and not any(x == s.get("label") if x in labels else x in name for x in select):
+            continue
+        with open(path.parent / "calls.csv", encoding="utf-8") as f:
+            rows = [{k: v if k == "kind" else float(v) if k in ("seconds", "cost_usd") else int(v) for k, v in r.items()}
+                    for r in csv.DictReader(f)]
+        runs.append((name, s, rows))
+    return runs[-last:] if last else runs
+
+
+def compare(select: list[str], last: int | None, metric: str, by_round: bool) -> int:
+    """План перед игрой, вопросы по видам (metric на один вызов), по желанию — раунды, и сводная."""
+    runs = load_runs(select, last)
     if not runs:
-        print(f"No runs in {BENCH_DIR.relative_to(ROOT)}/")
+        print(f"No matching runs in {BENCH_DIR.relative_to(ROOT)}/")
         return 0
-    print(f"{'run':40} {'git':>9} {'effort':>6} {'rnd':>3} {'calls':>5} {'output':>9} {'thinking':>9} "
-          f"{'out/call':>8} {'input':>11} {'tools':>5} {'$':>6} {'min':>5}")
-    for name, s in runs:
-        t = s["totals"]
-        head = s["git"]["head"] + ("*" if s["git"]["dirty"] else "")
-        print(f"{name[:40]:40} {head:>9} {s['effort']:>6} {s['rounds_played']:3} {t['calls']:5} {t['output']:9,} "
-              f"{t['thinking']:9,} {t['output'] // max(t['calls'], 1):8,} {t['input']:11,} {t['tools']:5} {t['cost_usd']:6.2f} "
-              f"{s['wall_seconds'] / 60:5.1f}")
-    print("\n* — uncommitted changes in heroes/ or docs/ (see prompt.diff of the run)")
+    head = f"{'run':40} {'effort':>6} {'calls':>5} {'output':>9} {'thinking':>9} {'out/call':>8} {'input':>11} {'tools':>5} {'$':>6} {'min':>5}"
+
+    def line(name: str, s: dict, t: dict) -> str:
+        return (f"{name[:40]:40} {s['effort']:>6} {t['calls']:5} {t['output']:9,} {t['thinking']:9,} "
+                f"{t['output'] // max(t['calls'], 1):8,} {t['input']:11,} {t['tools']:5} {t['cost_usd']:6.2f} "
+                f"{t['seconds'] / 60:5.1f}")
+
+    def table(title: str, pick) -> None:
+        print(f"\n{title}\n{head}")
+        for name, s, rows in runs:
+            print(line(name, s, totals([r for r in rows if pick(r)])))
+
+    table("BEFORE THE GAME (game_plan)", lambda r: r["kind"] == "game_plan")
+
+    # вопросы по видам: строки — вопросы, колонки — прогоны, в клетке — среднее на вызов и (число вызовов)
+    key = "cost_usd" if metric == "cost" else metric
+    # шапка колонки — три строки: метка, усилие, коммит (* — с незакоммиченной правкой, то есть новая версия
+    # промптов поверх этого коммита); повторные прогоны одной и той же версии помечаются #2, #3…
+    headers, seen = [], defaultdict(int)
+    for name, s, _ in runs:
+        commit = s["git"]["head"] + ("*" if s["git"]["dirty"] else "")
+        version = (s.get("label") or name[:19], s["effort"], commit)
+        seen[version] += 1
+        headers.append([version[0] + (f" #{seen[version]}" if seen[version] > 1 else ""), version[1], version[2]])
+    kinds: dict[str, float] = defaultdict(float)
+    for _, _, rows in runs:
+        for r in rows:
+            if r["kind"] != "game_plan":
+                kinds[r["kind"]] += r[key]
+    width = max([12, *(len(h) for hs in headers for h in hs)])
+    print(f"\nQUESTIONS: {METRICS[metric]} per call (number of calls)")
+    for i, title in enumerate(("question", "effort", "git")):
+        print(f"{title:22}" + "".join(f" {hs[i]:>{width}}" for hs in headers))
+    for kind in sorted(kinds, key=lambda k: -kinds[k]):
+        cells = []
+        for _, _, rows in runs:
+            rs = [r for r in rows if r["kind"] == kind]
+            if not rs:
+                cells.append("—")
+                continue
+            avg = sum(r[key] for r in rs) / len(rs)
+            value = f"{avg:.2f}" if metric == "cost" else f"{avg:,.0f}" if metric != "seconds" else f"{avg:.1f}"
+            cells.append(f"{value} ({len(rs)})")
+        print(f"{kind:22}" + "".join(f" {c:>{width}}" for c in cells))
+
+    if by_round:
+        for rnd in sorted({r["round"] for _, _, rows in runs for r in rows if r["kind"] != "game_plan"}):
+            table(f"ROUND {rnd} (without game_plan)", lambda r, rnd=rnd: r["kind"] != "game_plan" and r["round"] == rnd)
+    print(f"\nTOTAL\n{'run':40} {'git':>9} {'rnd':>3} {head[41:]}")
+    for name, s, rows in runs:
+        commit = s["git"]["head"] + ("*" if s["git"]["dirty"] else "")
+        t = {**totals(rows), "seconds": s["wall_seconds"]}   # вся партия, вместе с ходами ботов
+        print(f"{name[:40]:40} {commit:>9} {s['rounds_played']:3} {line('', s, t)[41:]}")
+    print("\nmin — Claude's answer time (TOTAL: the whole run). * — uncommitted changes in heroes/ or docs/ "
+          "(see prompt.diff of the run)")
     return 0
 
 
@@ -198,10 +265,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tools", action=argparse.BooleanOptionalAction, default=None,
                     help="give Claude its scripts in the bwrap sandbox (default: if bwrap is installed)")
     ap.add_argument("--verbose", action="store_true", help="print the game log at the end")
-    ap.add_argument("--compare", action="store_true", help="print all runs from logs/bench/ side by side and exit")
+    cmp = ap.add_argument_group("comparing runs")
+    cmp.add_argument("--compare", nargs="*", metavar="RUN",
+                     help="compare runs from logs/bench/ and exit; RUN — a label or a part of the folder name (none — all)")
+    cmp.add_argument("--last", type=int, metavar="N", help="--compare: only the last N of the selected runs")
+    cmp.add_argument("--metric", choices=METRICS, default="thinking",
+                     help="--compare: what the question table shows per call (default thinking)")
+    cmp.add_argument("--by-round", action="store_true", help="--compare: also a table for every round")
     args = ap.parse_args(argv)
-    if args.compare:
-        return compare()
+    if args.compare is not None:
+        return compare(args.compare, args.last, args.metric, args.by_round)
     if not 1 <= args.rounds <= 16:
         ap.error("--rounds: from 1 to 16")
     if args.bot_factions and len(args.bot_factions) != 3:
