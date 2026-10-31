@@ -198,7 +198,7 @@ def ui_json() -> bytes:
             "marks": marks.NAMES, "mark_base": marks.BASE, "colors": common.PLAYER_COLORS,
             "terrains": common.TERRAIN_NAMES, "resources": common.RESOURCE_NAMES, "resource_colors": common.RESOURCE_COLORS,
             "actions": common.ACTION_NAMES, "objects": common.OBJECT_NAMES, "glyphs": common.OBJECT_GLYPHS,
-            "levels": common.LEVELS, "scores": common.SCORE_NAMES, "doing": common.DOING,
+            "levels": common.LEVELS, "doing": common.DOING,
         }, ensure_ascii=False).encode("utf-8")
     return _ui
 
