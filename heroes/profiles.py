@@ -1,7 +1,7 @@
 """Профили игроков на компьютере хозяина: имя, аватарка, статистика партий.
 
-  profiles/<id>/profile.json      — {"id", "name", "created", "games": [запись о партии, …]}
-  profiles/<id>/avatar.png        — своя аватарка (квадрат PNG; её готовит браузер)
+  saves/profiles/<id>/profile.json  — {"id", "name", "created", "games": [запись о партии, …]}
+  saves/profiles/<id>/avatar.png    — своя аватарка (квадрат PNG; её готовит браузер)
 
 Профиль человека — по его имени за столом (без учёта регистра): хозяин заводит его сам, когда партия
 доиграна, и кладёт туда аватарку, с которой человек играл. Смотрят и правят профили в браузере
@@ -9,7 +9,8 @@
 
 Запись о партии — только о доигранной (после подсчёта очков); строится по тем же данным, что получает
 браузер (static и state из heroes/protocol/snapshot.py):
-  {"game_id", "date", "you": номер места, "players": [{"name", "kind", "faction", "faction_name",
+  {"game_id", "date", "you": номер места, "save": путь к сохранению доигранной партии (saves/final/…) или null,
+   "players": [{"name", "kind", "faction", "faction_name",
    "turn": место в очерёдности (1 — первый игрок первого раунда), "vp", "score", "winner", "profile"}, …]}
 """
 from __future__ import annotations
@@ -23,7 +24,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-PROFILE_DIR = Path("profiles")
+PROFILE_DIR = Path("saves") / "profiles"
 MAX_NAME = 24
 MAX_AVATAR = 300_000   # аватарка в base64 длиннее — не принимается (как в hello, net/server.py)
 HUMANS = ("human", "remote")   # «remote» — человек по сети в сохранениях прежних версий
@@ -157,9 +158,11 @@ def winners(state: dict) -> list[int]:
     return [p for p in leaders if stock[p] == max(stock.values())]
 
 
-def game_record(static: dict, state: dict, you: int, seat_profiles: dict[int, str] | None = None) -> dict:
+def game_record(static: dict, state: dict, you: int, seat_profiles: dict[int, str] | None = None,
+                save: str | None = None) -> dict:
     """Запись о доигранной партии с точки зрения игрока на месте you.
-    seat_profiles — какие места заняты профилями этого компьютера (для аватарок соперников)."""
+    seat_profiles — какие места заняты профилями этого компьютера (для аватарок соперников);
+    save — сохранение доигранной партии (savegame.final_save)."""
     seat_profiles = seat_profiles or {}
     n = len(state["players"])
     first = static.get("first_player", 0)   # у хозяина старой версии этих полей в static нет
@@ -180,22 +183,28 @@ def game_record(static: dict, state: dict, you: int, seat_profiles: dict[int, st
             "profile": seat_profiles.get(p),
         })
     return {"game_id": static.get("game_id") or uuid.uuid4().hex, "date": datetime.now().isoformat(timespec="seconds"),
-            "you": you, "players": players}
+            "you": you, "save": save, "players": players}
 
 
 def add_game(profile: Profile, record: dict) -> None:
-    """Добавить партию в статистику; та же партия (загруженная и доигранная снова) заменяет прежнюю запись."""
+    """Добавить партию в статистику; та же партия (загруженная и доигранная снова) заменяет прежнюю запись,
+    а без нового сохранения (открыли её финальное сохранение) — оставляет ссылку на прежнее."""
+    old = next((g for g in profile.games if g.get("game_id") == record["game_id"]), None)
+    if old and not record.get("save"):
+        record = {**record, "save": old.get("save")}
     profile.games = [g for g in profile.games if g.get("game_id") != record["game_id"]] + [record]
     save(profile)
 
 
-def record_game(static: dict, state: dict, seat_profiles: dict[int, str], folder: str | Path = PROFILE_DIR) -> list[str]:
-    """Записать доигранную партию во все профили за столом. Возвращает имена профилей, куда записано."""
+def record_game(static: dict, state: dict, seat_profiles: dict[int, str], folder: str | Path = PROFILE_DIR,
+                save: str | None = None) -> list[str]:
+    """Записать доигранную партию во все профили за столом (save — её сохранение). Возвращает имена профилей,
+    куда записано."""
     names = []
     for seat, profile_id in sorted(seat_profiles.items()):
         profile = get(profile_id, folder)
         if profile is not None:
-            add_game(profile, game_record(static, state, seat, seat_profiles))
+            add_game(profile, game_record(static, state, seat, seat_profiles, save))
             names.append(profile.name)
     return names
 

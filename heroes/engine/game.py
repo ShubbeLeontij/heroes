@@ -72,7 +72,8 @@ class Game:
     ):
         """replay — записанные решения (из сохранения): они проигрываются без опроса игроков.
         meta — сведения о запуске (типы игроков и т. п.), сохраняются вместе с партией.
-        autosave — папка, куда партия сохраняется в начале каждого раунда (savegame.autosave).
+        autosave — папка сохранений: партия сохраняется в её auto/ в начале каждого раунда (savegame.autosave),
+        а доигранная — ещё раз, с итогами, в final/ (savegame.final_save).
         legacy_replay — сохранение старого формата, где записаны и решения без выбора (forced);
         recorded_forced — виды решений, которые раньше задавались всегда, а теперь бывают без выбора:
         в сохранении такое решение может оказаться записанным."""
@@ -85,8 +86,10 @@ class Game:
         self.meta.setdefault("game_id", uuid.uuid4().hex)  # одна и та же партия в статистике профилей — одна запись
         self.autosave = autosave
         self.last_autosave: Path | None = None
+        self.final_save: Path | None = None   # сохранение доигранной партии (если его сделали)
         self.initial_first_player = first_player
         self.replay_queue: deque[dict] = deque(replay)
+        self.loaded_answers = len(self.replay_queue)
         self.legacy_replay = legacy_replay
         self.recorded_forced = frozenset(recorded_forced)
         names = names or [f"Player {i + 1}" for i in range(len(players))]
@@ -323,6 +326,9 @@ class Game:
             self.log(f"{self.state.players[p].name}: {s['total']} VP " + str({k: v for k, v in s.items() if k != 'total'}))
         win = scoring.winners(self, scores)
         self.log("Winner: " + ", ".join(self.state.players[p].name for p in win))
+        # загрузили уже доигранную партию (ни одного нового решения) — её финальное сохранение уже есть
+        if self.autosave and len(self.history) > self.loaded_answers:
+            self.final_save = savegame.final_save(self, self.autosave)
         return scores
 
 

@@ -56,15 +56,27 @@ function gamesWord(n) {
 }
 
 export class ProfilesScreen {
-  // root — элемент экрана; password() — пароль партии (с экрана подключения);
-  // onBack() — назад к подключению; onUse(profile) — «Играть под этим профилем»
-  constructor(root, { password, onBack, onUse }) {
+  // root — элемент экрана; password() — пароль партии (с экрана подключения); inGame() — открыт из партии
+  // (тогда назад — к партии, а «Играть под этим профилем» не нужно); onBack() — назад к подключению или
+  // к партии; onUse(profile) — «Играть под этим профилем»
+  constructor(root, { password, inGame, onBack, onUse }) {
     this.root = root;
     this.password = password;
+    this.inGame = inGame;
     this.onBack = onBack;
     this.onUse = onUse;
     this.list = [];
     this.selected = null;   // id открытого профиля или null — список
+    this.turn = false;      // в партии ждут нашего решения: кнопка «К партии» это показывает
+    this.backButton = null;
+  }
+
+  // посреди партии пришёл (или ушёл) наш ход
+  markTurn(turn) {
+    this.turn = turn;
+    if (!this.backButton) return;
+    this.backButton.textContent = turn ? "← К партии: ваш ход" : "← К партии";
+    this.backButton.classList.toggle("primary", turn);
   }
 
   async request(body) {
@@ -113,11 +125,16 @@ export class ProfilesScreen {
   }
 
   render(...content) {
-    const back = this.selected
+    const inGame = this.inGame();
+    this.backButton = inGame ? h("button", { type: "button", onclick: () => this.onBack() }) : null;
+    const back = this.backButton
+      || h("button", { type: "button", onclick: () => this.onBack() }, "← К подключению");
+    const list = this.selected
       ? h("button", { type: "button", onclick: () => { this.selected = null; this.error = null; this.show(); } }, "← Все профили")
-      : h("button", { type: "button", onclick: () => this.onBack() }, "← К подключению");
+      : null;
+    if (this.backButton) this.markTurn(this.turn);
     this.root.replaceChildren(h("div.card.profiles",
-      h("div.profiles-head", back, h("h1", "Профили")),
+      h("div.profiles-head", ...(inGame ? [back, list] : [list || back]), h("h1", "Профили")),
       this.error ? h("p.bad", this.error) : null,
       ...content));
   }
@@ -206,7 +223,7 @@ export class ProfilesScreen {
             h("label.file-button", "Выбрать картинку", photo),
             profile.avatar ? h("button.link", { type: "button", onclick: remove }, "убрать") : null))),
       h("div.inline",
-        h("button.primary", { type: "button", onclick: () => this.onUse(profile) }, "Играть под этим профилем"),
+        this.inGame() ? null : h("button.primary", { type: "button", onclick: () => this.onUse(profile) }, "Играть под этим профилем"),
         h("button", { type: "button", onclick: drop }, "Удалить профиль")),
       h("h2", "Статистика"),
       h("p.muted", stats),

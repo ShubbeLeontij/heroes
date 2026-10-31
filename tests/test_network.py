@@ -57,6 +57,26 @@ def test_spectator_watches_bots():
     assert received[-1] == {"t": "end", "text": "game over"}
 
 
+def test_results_reach_those_who_connect_after_the_end():
+    """После конца партии страница ещё открыта: игрок и зритель, подключившиеся позже, получают
+    всю партию и вслед за ней итоги."""
+    network = cli.Network(0, "secret", log_fn=lambda text: None)
+    seat = network.seat("Guest")
+    seat.greeting = lambda: [{"t": "sync"}]
+    server = network.server
+    server.audience.greeting = lambda: [{"t": "sync"}]
+    server.start()
+    try:
+        server.broadcast_end("game over")   # гость в это время не подключён
+        player = hello(server.port)
+        assert [player.recv()["t"] for _ in range(3)] == ["welcome", "sync", "end"]
+        spectator = hello(server.port, watch=True)
+        assert [spectator.recv()["t"] for _ in range(2)] == ["welcome", "sync"]
+        assert spectator.recv() == {"t": "end", "text": "game over"}
+    finally:
+        server.close()
+
+
 def test_spectator_with_human_seat_does_not_take_it():
     network = cli.Network(0, "secret", log_fn=lambda text: None)
     seat = network.seat("Guest")

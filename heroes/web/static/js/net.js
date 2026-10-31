@@ -20,6 +20,18 @@ export class Link {
       if (document.visibilityState === "visible") this.check();
     });
     window.addEventListener("online", () => this.check());
+    // Страницу закрыли или перезагрузили: соединение — закрыть сразу. Иначе Chromium может оставить её
+    // в кэше «назад-вперёд» вместе с живым WebSocket, и хозяин будет считать место занятым (после конца
+    // партии — навсегда). Вернули страницу из этого кэша — подключаемся снова.
+    window.addEventListener("pagehide", () => {
+      if (!this.ws) return;
+      this.ws.onclose = null;
+      this.ws.close();
+      this.ws = null;
+    });
+    window.addEventListener("pageshow", (e) => {
+      if (e.persisted) this.check();
+    });
   }
 
   // name — место за столом (null — сервер предложит свободные), password, avatar — PNG в base64 или null;

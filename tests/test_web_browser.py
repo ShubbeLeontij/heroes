@@ -352,6 +352,69 @@ def test_profiles_screen(browser, tmp_path, monkeypatch):
         network.server.close()
 
 
+def host_game(server, game, finished: threading.Event | None = None) -> threading.Thread:
+    """Партия у «хозяина» в отдельном потоке, конец — как в cli.main (итоги всем)."""
+    def host():
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert cli.open_table(game, server, SimpleNamespace(password="secret"), out=lambda text: None)
+            scores = game.run()
+            server.broadcast_end("\n" + R.final_scores(game, scores, scoring.winners(game, scores)))
+        if finished:
+            finished.set()
+    thread = threading.Thread(target=host, daemon=True)
+    thread.start()
+    return thread
+
+
+def test_profiles_during_the_game_and_back(browser, tmp_path, monkeypatch):
+    """Посреди партии: «Профили» в полосе сверху, оттуда — назад к партии; вопрос, ждущий ответа, на месте."""
+    monkeypatch.chdir(tmp_path)
+    network = cli.Network(0, "secret", log_fn=lambda text: None)
+    meta = {"players": ["human", "bot"], "seed": 2}
+    game = Game(cli.make_players(meta, ["Гость", "Бот"], False, network), names=["Гость", "Бот"], meta=meta)
+    server = network.server
+    server.start()
+    try:
+        host_game(server, game)
+        browser.errors.clear()
+        browser.open(f"http://127.0.0.1:{server.port}/?name=Гость&password=secret")
+        browser.wait_for("app.pending !== null && document.querySelector('#decision .panel') !== null")
+        browser.evaluate("document.getElementById('profiles-open').click(); 1")
+        assert browser.wait_for("document.body.dataset.screen === 'profiles' && app.profiles.list !== undefined "
+                                "&& document.querySelector('#profiles .profiles-head button')?.textContent") == "← К партии: ваш ход"
+        assert browser.wait_for("document.querySelector('#profiles .card p:not(.muted)')?.textContent") == "Профилей пока нет."
+        browser.evaluate("document.querySelector('#profiles .profiles-head button').click(); 1")
+        assert browser.wait_for("document.body.dataset.screen") == "game"
+        assert browser.evaluate("app.pending !== null && document.querySelector('#decision .panel') !== null")
+        assert not browser.errors, browser.errors
+    finally:
+        server.close()
+
+
+def test_results_are_shown_after_reconnecting_to_a_finished_game(browser):
+    """Партия кончилась, страница хозяина ещё открыта: заново открывший страницу игрок видит итоги
+    (а не «все места заняты» — прежнее соединение не остаётся висеть в кэше браузера)."""
+    network = cli.Network(0, "secret", log_fn=lambda text: None)
+    meta = {"players": ["human", "bot"], "seed": 4}
+    game = Game(cli.make_players(meta, ["Гость", "Бот"], False, network), names=["Гость", "Бот"], meta=meta)
+    server = network.server
+    finished = threading.Event()
+    server.start()
+    try:
+        host_game(server, game, finished)
+        url = f"http://127.0.0.1:{server.port}/?name=Гость&password=secret"
+        browser.errors.clear()
+        browser.open(url + "&test=random&seed=4")
+        assert finished.wait(GAME_SECONDS)
+        browser.wait_for("document.querySelector('.finished table.scores') !== null", timeout=10)
+        browser.open(url)   # как перезагрузка: прежнее соединение страница закрывает сама (pagehide)
+        assert browser.wait_for("document.querySelector('.finished table.scores') !== null", timeout=10)
+        assert browser.evaluate("document.querySelectorAll('.finished').length") == 1
+        assert not browser.errors, browser.errors
+    finally:
+        server.close()
+
+
 class Stop(Exception):
     pass
 

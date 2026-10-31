@@ -98,12 +98,14 @@ class App {
     this.pending = null;      // решение, ждущее нашего ответа
     this.panel = null;
     this.ended = false;
+    this.finished = false;    // итоги показаны
     this.unread = 0;
     this.watching = false;    // зритель: места за столом нет, решений не бывает
     this.link = new Link({ message: (m) => this.handle(m), state: (text) => this.connection(text) });
     this.profiles = new ProfilesScreen($("profiles"), {
       password: () => $("join-password").value || store.get("heroes.password"),
-      onBack: () => this.joinScreen(null, false),
+      inGame: () => Boolean(this.static),
+      onBack: () => (this.static ? this.backToGame() : this.joinScreen(null, false)),
       onUse: (profile) => {   // с этим именем и аватаркой и подключаемся (имя из ссылки больше не главное)
         store.set("heroes.name", profile.name);
         store.set("heroes.avatar", profile.avatar);
@@ -129,10 +131,12 @@ class App {
     $("log-close").addEventListener("click", () => this.toggleLog(false));
     $("join-watch").addEventListener("click", () => this.join(true));
     $("join-profiles").addEventListener("click", () => this.profilesScreen());
+    $("profiles-open").addEventListener("click", () => this.profilesScreen());
     if (location.hash === "#profiles") this.profilesScreen();
     else this.joinScreen();
   }
 
+  // посреди партии (и после неё) связь с хозяином остаётся: вопросы приходят, назад — к партии (backToGame)
   profilesScreen() {
     if (!this.static) {   // ожидающий выбора места запрос к хозяину не нужен, пока смотрим профили
       this.link.ended = true;
@@ -140,6 +144,12 @@ class App {
     }
     document.body.dataset.screen = "profiles";
     this.profiles.open();
+    this.profiles.markTurn(Boolean(this.pending));
+  }
+
+  backToGame() {
+    document.body.dataset.screen = "game";
+    if (this.state && this.static) this.refresh();
   }
 
   // --- подключение ---------------------------------------------------------------------------
@@ -302,7 +312,8 @@ class App {
   }
 
   gameScreen() {
-    if (document.body.dataset.screen === "game") return;
+    const screen = document.body.dataset.screen;
+    if (screen === "game" || (screen === "profiles" && this.static)) return;   // из профилей партии не выдёргиваем
     document.body.dataset.screen = "game";
     $("join-submit").disabled = false;
     $("join-status").textContent = "";
@@ -574,6 +585,7 @@ class App {
     document.body.classList.add("my-turn");
     this.title();
     this.setView("decision");   // на телефоне решение — на своей вкладке (карта видна всегда)
+    this.profiles.markTurn(true);
     if (document.visibilityState !== "visible" || !this.wasPending) navigator.vibrate?.(120);
     this.wasPending = true;
   }
@@ -583,6 +595,7 @@ class App {
     this.pending = null;
     this.wasPending = false;
     document.body.classList.remove("my-turn");
+    this.profiles.markTurn(false);
     this.link.answer(m.id, answer);
     this.waiting(isSecret(m) ? "Выбор сделан и скрыт от соперников." : null);
     this.setStatus("Ждём остальных игроков…");
@@ -620,9 +633,12 @@ class App {
 
   // --- конец партии --------------------------------------------------------------------------
 
+  // итоги приходят и тому, кто подключился уже после конца партии (сервер шлёт их вслед за sync)
   finish(text, textRu) {
-    this.ended = true;
+    if (this.finished) return;
+    this.finished = this.ended = true;
     this.pending = null;
+    this.profiles.markTurn(false);
     document.body.classList.remove("my-turn");
     this.clearDecision();
     const finished = text.includes("FINAL SCORES") && this.state;
