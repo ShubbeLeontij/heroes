@@ -29,6 +29,7 @@ class Seat:
         self.avatar: str | None = None   # своя аватарка игрока (PNG в base64), если клиент её прислал
         # Сообщения, с которых начинается связь: вся партия целиком.
         self.greeting: Callable[[], list[dict]] | None = None
+        self.final: dict | None = None   # итоги партии (end): кто подключится после конца, получит и их
         self.cond = threading.Condition()
         self.send_lock = threading.Lock()
 
@@ -38,9 +39,9 @@ class Seat:
         return self.conn is not None and not getattr(self.conn, "closed", False)
 
     def attach(self, conn: Connection) -> None:
-        """Посадить игрока за место и прислать ему всю партию (greeting)."""
+        """Посадить игрока за место и прислать ему всю партию (greeting), а после её конца — и итоги."""
         with self.send_lock:
-            for message in self.greeting() if self.greeting else []:
+            for message in [*(self.greeting() if self.greeting else []), *([self.final] if self.final else [])]:
                 conn.send(message)
             with self.cond:
                 old, self.conn = self.conn, conn
@@ -96,10 +97,11 @@ class Audience:
         self.conns: list[Connection] = []
         self.lock = threading.Lock()
         self.greeting: Callable[[], list[dict]] | None = None
+        self.final: dict | None = None   # итоги партии, как у Seat
 
     def attach(self, conn: Connection) -> None:
         with self.lock:
-            for message in self.greeting() if self.greeting else []:
+            for message in [*(self.greeting() if self.greeting else []), *([self.final] if self.final else [])]:
                 conn.send(message)
             self.conns.append(conn)
 
@@ -222,9 +224,13 @@ class Server:
             time.sleep(0.3)
 
     def broadcast_end(self, text: str) -> None:
+        """Итоги — всем сейчас и каждому, кто подключится позже (страница открыта и после партии)."""
+        message = {"t": "end", "text": text}
         for seat in self.seats.values():
-            seat.send({"t": "end", "text": text})
-        self.audience.send({"t": "end", "text": text})
+            seat.final = message
+            seat.send(message)
+        self.audience.final = message
+        self.audience.send(message)
 
     def close(self) -> None:
         if self.sock:

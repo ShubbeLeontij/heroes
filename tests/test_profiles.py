@@ -3,6 +3,7 @@ import base64
 import json
 import socket
 import struct
+from pathlib import Path
 
 import pytest
 
@@ -19,9 +20,9 @@ PIXEL = base64.b64encode(bytes.fromhex(
     "1f15c4890000000d49444154789c63f8ffffff7f0009fb03fd2a86e38a0000000049454e44ae426082")).decode()
 
 
-def finished_game(n=3, first=1, kinds=("human", "claude", "bot", "remote")):
+def finished_game(n=3, first=1, kinds=("human", "claude", "bot", "remote"), autosave=None):
     game = Game([RandomBot(i) for i in range(n)], names=["Аня", "Claude", "Бот", "Гость"][:n], first_player=first,
-                meta={"players": list(kinds[:n]), "seed": 0})
+                meta={"players": list(kinds[:n]), "seed": 0}, autosave=autosave)
     game.run()
     return game
 
@@ -46,9 +47,10 @@ def test_game_record_from_finished_game(tmp_path):
     game = finished_game()
     static, state = static_data(game), snapshot(game)
     anya = profiles.create("Аня", tmp_path)
-    assert profiles.record_game(static, state, {0: anya.id}, tmp_path) == ["Аня"]
+    final = "saves/final/round16_final_2026-10-31_12-00-00.json"
+    assert profiles.record_game(static, state, {0: anya.id}, tmp_path, save=final) == ["Аня"]
     record = profiles.get(anya.id, tmp_path).games[0]
-    assert record["you"] == 0 and record["game_id"] == game.meta["game_id"]
+    assert record["you"] == 0 and record["game_id"] == game.meta["game_id"] and record["save"] == final
     players = record["players"]
     assert [p["kind"] for p in players] == ["human", "claude", "bot"]
     assert [p["turn"] for p in players] == [3, 1, 2]       # первый игрок первого раунда — место 1
@@ -57,9 +59,10 @@ def test_game_record_from_finished_game(tmp_path):
     assert [p for p, pl in enumerate(players) if pl["winner"]] == profiles.winners(state)
     assert players[0]["profile"] == anya.id and players[1]["profile"] is None
 
-    # та же партия, доигранная ещё раз из сохранения, не дублируется
+    # та же партия, открытая ещё раз из финального сохранения, не дублируется и ссылается на него же
     profiles.record_game(static, state, {0: anya.id}, tmp_path)
     assert len(profiles.get(anya.id, tmp_path).games) == 1
+    assert profiles.get(anya.id, tmp_path).games[0]["save"] == final
     s = profiles.summary(profiles.get(anya.id, tmp_path))
     assert s["games"] == 1 and s["best_vp"] == players[0]["vp"]
 
@@ -104,15 +107,18 @@ def test_builtin_avatars_exist():
 
 
 def test_host_records_game_with_avatar(tmp_path, monkeypatch):
-    """Конец партии у хозяина: человеку заводится профиль по имени, туда — партия и его аватарка."""
+    """Конец партии у хозяина: человеку заводится профиль по имени (в saves/profiles), туда — партия со ссылкой
+    на её финальное сохранение и его аватарка."""
     monkeypatch.chdir(tmp_path)
-    game = finished_game(n=2, kinds=("human", "bot"))
+    game = finished_game(n=2, kinds=("human", "bot"), autosave="saves")
     game.avatars[0] = PIXEL
     out = []
     cli.record_profiles(game, out=out.append)
     anya = profiles.by_name("Аня")
     assert out == ["Recorded in the profile statistics: Аня"]
     assert len(anya.games) == 1 and profiles.avatar_b64(anya) == PIXEL
+    assert anya.path.parent == Path("saves/profiles")
+    assert anya.games[0]["save"] == str(game.final_save) and game.final_save.parent == Path("saves/final")
     assert profiles.by_name("Бот") is None
 
 

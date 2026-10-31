@@ -8,7 +8,7 @@
   python -m heroes --players claude,claude --show-thoughts   # Claude против Claude, с замыслами
   python -m heroes --players claude,claude --watch  # то же, а смотреть партию можно в браузере
   python -m heroes --players human,human --names Аня,Боря --password сова
-  python -m heroes --load saves/<файл>.json         # продолжить сохранённую партию
+  python -m heroes --load saves/auto/<файл>.json    # продолжить сохранённую партию
   python -m heroes --continue                       # продолжить самую свежую
   python -m heroes --profiles                       # только страница «Профили и статистика»
 """
@@ -46,7 +46,7 @@ MODELS = {"claude-opus-5-5": "Opus 5.5 — strongest, ≈$3–4 per game per pla
           "claude-sonnet-5-5": "Sonnet 5.5 — faster and cheaper",
           "claude-haiku-5-5": "Haiku 5.5 — very cheap, weaker"}
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
-AUTOSAVE = "saves"   # папка автосохранений
+AUTOSAVE = "saves"   # папка автосохранений (в ней auto/ и final/)
 # Фракции первой коробки в порядке правил; у каждой один планшет, поэтому за столом они не повторяются.
 FACTIONS = ("humans", "undead", "dwarves", "orcs", "elves", "nagas")
 RANDOM = "random"
@@ -148,7 +148,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                          "(default: when bwrap is installed, i.e. on Linux)")
     ap.add_argument("--show-thoughts", action=argparse.BooleanOptionalAction, default=None,
                     help="print Claude's plans in this terminal (default: only when no humans are playing)")
-    ap.add_argument("--autosave", default=AUTOSAVE, help=f"folder for the autosave made at the start of each round (default {AUTOSAVE}; '' disables)")
+    ap.add_argument("--autosave", default=AUTOSAVE, help=f"folder for the autosaves made at the start of each round (its auto/) and for the final save "
+                    f"of a finished game (its final/); default {AUTOSAVE}; '' disables both")
     net = ap.add_argument_group("browser")
     net.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"game server port (default {DEFAULT_PORT})")
     net.add_argument("--password", help="game password (humans enter it in the browser)")
@@ -241,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             scores = game.run()
         except KeyboardInterrupt:
-            path = savegame.save(game, savegame.default_path(game, "interrupted"))
+            path = savegame.save(game, savegame.default_path(game, savegame.INTERRUPTED))
             print(f"\nInterrupted. Game saved: {path}")
             if server:
                 server.broadcast_end("The host interrupted the game. It is saved and can be continued.")
@@ -249,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
         result = R.final_scores(game, scores, scoring.winners(game, scores))
         print()
         print(result)
+        if game.final_save:
+            print(f"Final save (load it to see the results again): {game.final_save}")
         record_profiles(game)
         if server:
             server.broadcast_end("\n" + result)
@@ -366,7 +369,8 @@ def record_profiles(game: Game, out: Callable[[str], None] = print) -> None:
                     profiles.set_avatar(profile, avatar)
                 except ValueError:
                     pass
-        names = profiles.record_game(static_data(game), snapshot(game), seats) if seats else []
+        save = str(game.final_save) if game.final_save else None
+        names = profiles.record_game(static_data(game), snapshot(game), seats, save=save) if seats else []
     except OSError as e:
         out(f"Could not record the game in the profiles: {e}")
         return

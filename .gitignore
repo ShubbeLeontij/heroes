@@ -4,6 +4,5 @@ __pycache__/
 saves/
 .pytest_cache/
 logs/
-profiles/
 strategy/
 dist/

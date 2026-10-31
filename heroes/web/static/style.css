@@ -169,7 +169,7 @@ table.game-table tr.you td { font-weight: bold; }
 .chip.current { background: var(--accent); border-color: var(--accent); color: white; font-weight: bold; }
 .chip.done { background: var(--bar); color: var(--muted); }
 #status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; font-size: 0.9rem; }
-#log-toggle { min-height: 34px; padding: 0 10px; white-space: nowrap; }
+#log-toggle, #profiles-open { min-height: 34px; padding: 0 10px; white-space: nowrap; }
 .unread { display: inline-block; min-width: 1.4em; padding: 0 4px; border-radius: 10px; background: var(--accent); color: white; font-size: 0.75rem; text-align: center; }
 
 #order {

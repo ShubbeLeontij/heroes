@@ -4,9 +4,12 @@
 и журналу решений: при загрузке движок заново проигрывает все записанные ответы.
 Так можно сохраниться в любой момент — даже посреди раунда, в ожидании решения.
 
-Имена файлов — номер раунда и дата и время сохранения: saves/round05_2026-10-17_19-45-02.json;
-автосохранение в начале каждого раунда — с «_auto» (хранятся все), прерванная
-партия — с «_interrupted».
+Сохранения разложены по папкам saves/ по виду, в имени — номер раунда, дата и время:
+  saves/manual/round05_2026-10-17_19-45-02.json                   — командой save хозяина;
+  saves/auto/round05_auto_2026-10-17_19-45-02.json                — в начале каждого раунда (хранятся все);
+  saves/interrupted/round05_interrupted_2026-10-17_19-45-02.json  — партия, прерванная по Ctrl+C;
+  saves/final/round16_final_2026-10-17_19-45-02.json              — доигранная (загрузив её, получаешь итоги).
+Там же, в saves/profiles/, — профили игроков (heroes/profiles.py); их записи о партиях ссылаются на final.
 """
 from __future__ import annotations
 
@@ -23,26 +26,35 @@ SAVE_VERSION = 3  # 2 — решения без выбора (Decision.forced) �
 # виды решений, которые в сохранениях старых версий записаны, даже если теперь выбора в них нет
 RECORDED_FORCED = {2: {"region_stance"}}
 SAVE_DIR = Path("saves")
+# виды сохранений — у каждого своя папка в SAVE_DIR
+MANUAL, AUTO, INTERRUPTED, FINAL = "manual", "auto", "interrupted", "final"
+RESUMABLE = (MANUAL, AUTO, INTERRUPTED)   # доигранную партию продолжать нечего
 
 
-def default_path(game: Game, kind: str = "", folder: str | Path = SAVE_DIR, round_: int | None = None) -> Path:
-    """saves/round<NN>[_<kind>]_<дата>_<время>.json; round_ — номер раунда, если не текущий."""
+def default_path(game: Game, kind: str = MANUAL, folder: str | Path = SAVE_DIR, round_: int | None = None) -> Path:
+    """saves/<kind>/round<NN>[_<kind>]_<дата>_<время>.json (у ручных — без «_<kind>»);
+    round_ — номер раунда, если не текущий."""
     number = game.state.round if round_ is None else round_
     stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return Path(folder) / (f"round{number:02d}" + (f"_{kind}" if kind else "") + f"_{stamp}.json")
+    return Path(folder) / kind / (f"round{number:02d}" + (f"_{kind}" if kind != MANUAL else "") + f"_{stamp}.json")
 
 
 def autosave(game: Game, folder: str | Path) -> Path:
     """Сохранение в начале раунда (номер — того, что начинается). Прежние автосохранения партии остаются:
     вернуться можно к началу любого раунда."""
-    path = save(game, default_path(game, "auto", folder, game.state.round + 1))
+    path = save(game, default_path(game, AUTO, folder, game.state.round + 1))
     game.last_autosave = path
     return path
 
 
+def final_save(game: Game, folder: str | Path) -> Path:
+    """Доигранная партия — с итогами: её можно открыть ещё раз, чтобы посмотреть их."""
+    return save(game, default_path(game, FINAL, folder))
+
+
 def latest(folder: str | Path = SAVE_DIR) -> Path | None:
-    """Самое свежее сохранение в папке."""
-    files = list(Path(folder).glob("*.json")) if Path(folder).is_dir() else []
+    """Самое свежее сохранение, которое можно продолжить (доигранные партии — нет)."""
+    files = [f for kind in RESUMABLE for f in (Path(folder) / kind).glob("*.json")]
     return max(files, key=lambda f: f.stat().st_mtime, default=None)
 
 
