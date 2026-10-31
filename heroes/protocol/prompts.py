@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from ..engine import scoring
 from ..engine.combat import artifact_condition
-from ..engine.data import DATA_DIR, TERRAINS
+from ..engine.data import DATA_DIR, ONE_TIME_EFFECTS, TERRAINS
 from ..engine.effects import hydra_unit
 from ..engine.state import OBJECT_NAMES, ROUNDS, TERRAIN_NAMES
 from . import notes
@@ -51,9 +51,14 @@ def monster_line_text(monsters) -> str:
     return "; ".join(f"strength {m.strength} → {m.vp} VP" + (f" + {R.res(m.loot)}" if m.loot else "") for m in monsters)
 
 
-def faction_text(game: Game, p: int) -> str:
-    faction = game.faction_of(p)
-    lines = [f"FACTION BOARD: {faction.name}"]
+def faction_text(game: Game, q: int, p: int) -> str:
+    """Планшет фракции игрока q так, как его видит Claude-игрок p: свой или соперника — одинаково полно.
+    Артефакты — отдельно, в artifacts_text: так их проще сравнить между фракциями."""
+    faction = game.faction_of(q)
+    pl = game.state.players[q]
+    lines = [f"YOUR FACTION BOARD: {faction.name}" if q == p else
+             f"OPPONENT FACTION BOARD: {faction.name} — {pl.name}, player number {q}. Its texts say «you» meaning "
+             f"{pl.name}."]
     if faction.rules:
         lines.append("Faction properties (they hold all game long):")
         lines += [f"  {rule.name}: {rule.text}" for rule in faction.rules.values()]
@@ -67,25 +72,26 @@ def faction_text(game: Game, p: int) -> str:
     for bid, b in sorted(faction.buildings.items(), key=lambda kv: kv[1].level):
         req = " or ".join(faction.buildings[r].name for r in b.requires) or "—"
         lines.append(f"  {bid} — {b.name}: level {b.level}, {b.vp} VP, cost {R.res(b.cost)}, requires: {req}. {b.text}")
-    lines.append("Artifacts (region: condition to gain → effect for your faction):")
-    for region, a in faction.artifacts.items():
-        lines.append(f"  {region}: {R.condition_text(artifact_condition(game, p, region))} → {a.text}")
     if faction.monsters:
-        lines.append("Your own monster line (instead of the common one), left to right: " + monster_line_text(faction.monsters))
-    lines.append("Resource abbreviations: w — wood, i — iron, g — gold, a — any resource of your choice.")
+        lines.append("Own monster line (instead of the common one), left to right: " + monster_line_text(faction.monsters))
     return "\n".join(lines)
 
 
-def opponent_factions_text(game: Game, p: int) -> str:
-    """Свойства фракций соперников: без них не понять, чего от них ждать (проклятия, гидра…)."""
-    lines = ["OPPONENT FACTIONS (their full boards are summarised in OPPONENTS during the game):"]
-    for fid in dict.fromkeys(pl.faction for q, pl in enumerate(game.state.players) if q != p):
-        faction = game.factions[fid]
-        lines.append(f"  {faction.name}: movement " + ", ".join(f"{TERRAIN_NAMES[t]} {faction.movement[t]}" for t in TERRAINS)
-                     + "; units " + ", ".join(f"{u.name} (strength {u.strength})" for u in faction.units.values()))
-        lines += [f"    {rule.name}: {rule.text}" for rule in faction.rules.values()]
-        if faction.monsters:
-            lines.append("    Own monster line: " + monster_line_text(faction.monsters))
+def artifacts_text(game: Game, p: int) -> str:
+    """Каждый артефакт: условие получения и эффект — для себя и для каждого соперника."""
+    order = [p] + [q for q in range(len(game.state.players)) if q != p]
+    lines = ["ARTIFACTS — the same 6 regions for everybody, but the condition (for some factions) and the effect differ "
+             "per faction. Each artifact has one owner; a battle winner may take one from a loser without meeting its "
+             "condition. A one-time effect fires each time the artifact is gained (also when taken in battle) and "
+             "stays with a loser; a permanent effect moves with the artifact."]
+    for region, a in game.faction_of(p).artifacts.items():
+        lines.append(f"  {region}:")
+        for q in order:
+            effect = game.faction_of(q).artifacts[region]
+            kind = "one-time" if all(e["type"] in ONE_TIME_EFFECTS for e in effect.effects) else "permanent"
+            who = "you" if q == p else f"{game.state.players[q].name} ({game.faction_of(q).name})"
+            lines.append(f"    {who}: {R.condition_text(artifact_condition(game, q, region))} → {kind}: {effect.text}")
+    lines.append("Resource abbreviations: w — wood, i — iron, g — gold, a — any resource of your choice.")
     return "\n".join(lines)
 
 
@@ -114,8 +120,7 @@ def time_text(seconds: float) -> str:
     return (f"TIME. Each answer has a hard limit of about {round(seconds / 60)} minutes, thinking and tool calls included; "
             "past it the answer is lost and the question is asked again. Use that time: on key decisions (the start, "
             "action order, building and hiring, moves, battles, rewards) think deeply for several minutes — compare "
-            "alternatives, count VP, resources and strength over the next rounds, check your numbers"
-            " — and answer minor questions quickly.")
+            "alternatives, count VP, resources and strength over the next rounds, check your numbers.")
 
 
 def system_prompt(game: Game, p: int, variant: str, tools: str | None = None, time_limit: float | None = None) -> str:
@@ -129,7 +134,8 @@ def system_prompt(game: Game, p: int, variant: str, tools: str | None = None, ti
         f"You are playing the board strategy game «Герои» (Hobby World) as the faction {game.faction_of(p).name}. "
         f"Your name in this game is {me.name}, your player number is {p}. Opponents: {others}. "
         f"Seating, clockwise: {seating}.",
-        rules_text(), notes.rules_prompt_text(), faction_text(game, p), opponent_factions_text(game, p), map_text(game),
+        rules_text(), notes.rules_prompt_text(), faction_text(game, p, p),
+        *(faction_text(game, q, p) for q in range(len(st.players)) if q != p), artifacts_text(game, p), map_text(game),
         notes.prompt_text(variant, game.state.players[p].faction), *([tools] if tools else []),
         *([time_text(time_limit)] if time_limit else []), PROTOCOL,
     ])
@@ -202,14 +208,20 @@ def game_plan(game: Game, p: int, opponents: dict[str, str], tools: bool) -> str
     return "\n\n".join([
         f"THE GAME IS ABOUT TO START. Opponents are played by: {played_by(opponents)}.",
         "QUESTION (game_plan): before your first decision, take time to think through your strategy for this whole "
-        "game. Use the rules, your faction board, the map and your strategy notes. Cover:\n"
+        "game. Use the rules, your faction board, the opponents' boards, the artifacts, the map and your strategy notes. Cover:\n"
         "- your overall plan: economy, the order of buildings, which monsters, fortresses and artifacts to go for, "
         "a rough timeline over the 16 rounds and a good starting region;\n"
-        "- for each opponent faction in this game: what it threatens you with and how you will counter it.\n"
+        "- your opponents: analyse each of them from its full faction board. How will it most likely play? Which "
+        "buildings will it rush first, in which round can it have them, and how will its play change after that (new "
+        "units, more strength, more MP, VP sources)? Which events in the game must you watch for (a key building "
+        "built, a hire, a fortress or artifact taken, its army growing past yours) and how will you react to each?\n"
+        "- the artifacts: for each one, what it costs you and what it gives you, and what it would give each opponent. "
+        "Which ones to take yourself and when, which ones you must deny an opponent (take first or win in battle), "
+        "and which ones are not worth it.\n"
         "You will keep this plan in mind for the rest of the game and adapt it as the game goes."
         + (" This is a good moment to use your tools: read your scripts' README, check numbers with scripts or "
            "simulations." if tools else ""),
-        "FORMAT: answer — your plan as a string, terse bullet points, at most about 1500 characters. No separate "
+        "FORMAT: answer — your plan as a string, terse bullet points, at most about 2500 characters. No separate "
         "analysis text is needed here: the plan is your answer.",
     ])
 

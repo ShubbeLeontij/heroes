@@ -1,0 +1,106 @@
+{
+  "label": "opp-boards-max",
+  "time": "2026-10-31_22-06-00",
+  "rounds_played": 3,
+  "rounds": 3,
+  "interrupted": false,
+  "error": null,
+  "wall_seconds": 693,
+  "model": "claude-opus-5-5",
+  "effort": "max",
+  "tools": true,
+  "seed": 1,
+  "factions": [
+    "humans",
+    "dwarves",
+    "undead",
+    "nagas"
+  ],
+  "session": "1cc643cc-de8a-4893-a96b-68ea71c59d9b",
+  "session_cost_usd": 3.3171,
+  "defaults_used": 0,
+  "git": {
+    "head": "13e4622",
+    "dirty": true
+  },
+  "inputs": {
+    "notes": null,
+    "rules_special": "c36b16c9badb",
+    "rules_eng": "e09c90a39e31"
+  },
+  "totals": {
+    "calls": 10,
+    "failed": 0,
+    "seconds": 692.8,
+    "input": 3436532,
+    "output": 67570,
+    "thinking": 56333,
+    "cost_usd": 3.3171,
+    "tools": 27
+  },
+  "by_kind": {
+    "game_plan": {
+      "calls": 1,
+      "seconds": 512.8,
+      "input": 1961207,
+      "output": 51239,
+      "thinking": 43588,
+      "cost_usd": 2.3888,
+      "tools": 27
+    },
+    "build_recruit": {
+      "calls": 3,
+      "seconds": 61.5,
+      "input": 501969,
+      "output": 5562,
+      "thinking": 4381,
+      "cost_usd": 0.318,
+      "tools": 0
+    },
+    "destination": {
+      "calls": 2,
+      "seconds": 45.9,
+      "input": 324629,
+      "output": 4300,
+      "thinking": 3568,
+      "cost_usd": 0.2213,
+      "tools": 0
+    },
+    "action_order": {
+      "calls": 1,
+      "seconds": 32.5,
+      "input": 150613,
+      "output": 3167,
+      "thinking": 2332,
+      "cost_usd": 0.1535,
+      "tools": 0
+    },
+    "reserve_object": {
+      "calls": 1,
+      "seconds": 27.7,
+      "input": 182207,
+      "output": 2523,
+      "thinking": 2092,
+      "cost_usd": 0.1396,
+      "tools": 0
+    },
+    "distribute_resources": {
+      "calls": 1,
+      "seconds": 7.3,
+      "input": 158369,
+      "output": 455,
+      "thinking": 272,
+      "cost_usd": 0.0473,
+      "tools": 0
+    },
+    "fight_monster": {
+      "calls": 1,
+      "seconds": 5.1,
+      "input": 157538,
+      "output": 324,
+      "thinking": 100,
+      "cost_usd": 0.0486,
+      "tools": 0
+    }
+  }
+}
