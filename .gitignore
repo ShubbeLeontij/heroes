@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 saves/
 .pytest_cache/
-logs/
+logs/*
+!logs/bench/
 strategy/
 dist/
