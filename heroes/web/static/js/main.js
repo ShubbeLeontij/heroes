@@ -665,8 +665,10 @@ class App {
     const st = this.state, static_ = this.static, win = C.winners(st);
     const head = h("tr", h("th"), st.players.map((pl, p) => h("th", { style: { color: win.includes(p) ? "var(--good)" : C.color(p) } },
       icon(`avatar${p}`, "big"), h("div", C.nameOf(static_, p) + (win.includes(p) ? " ★" : "")))));
-    const rows = [...Object.entries(UI.scores), ["total", "ИТОГО"]].map(([key, title]) =>
-      h("tr" + (key === "total" ? ".total" : ""), h("th", title), st.players.map((pl) => h("td", String(pl.score[key])))));
+    // категории — значками, как в профиле (title — словом), последняя строка — сумма
+    const heads = [...C.scoreHeads(), h("th", { title: "итого" }, "ИТОГО")];
+    const rows = [...Object.keys(C.SCORE_CATEGORIES), "total"].map((key, i) =>
+      h("tr" + (key === "total" ? ".total" : ""), heads[i], st.players.map((pl) => h("td", String(pl.score[key])))));
     return h("table.scores", h("thead", head), h("tbody", rows));
   }
 

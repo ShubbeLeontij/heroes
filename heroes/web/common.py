@@ -24,8 +24,6 @@ OBJECT_NAMES = {"fortress": "крепость", "foundation": "фундамен�
 OBJECT_GLYPHS = {"fortress": "⚔ крепость", "foundation": MARKS["foundation"], "portal": MARKS["portal"],
                  "artifact": MARKS["artifact"]}
 LEVELS = {n: MARKS[f"level{n}"] for n in range(1, 5)}   # гвозди уровня здания, как в памятке
-SCORE_NAMES = {"buildings": "здания и эффекты", "foundations": MARKS["foundation"], "resources": "запасы ресурсов",
-               "battles": MARKS["victory"], "artifacts": MARKS["artifact"]}   # где есть значок — значком
 
 # чем занят игрок, пока принимает решение (state["thinking"]); {region} — регион, где он стоит
 DOING = {
