@@ -14,7 +14,8 @@ class Watcher(RandomBot):
 
     def decide(self, decision, view):
         game, p, d = view.game, decision.player, decision.data
-        units = army_strength(game, p, available_units(game, p))
+        pool = {u: info["count"] for u, info in d["units"].items()} if "units" in d else available_units(game, p)
+        units = army_strength(game, p, pool)   # у отдельной гидры — своя заявка
         if decision.kind in ("choose_start", ):
             assert len(d["options"]) > 1
         elif decision.kind == "destination":

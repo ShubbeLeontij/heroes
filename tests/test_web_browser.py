@@ -126,8 +126,8 @@ def test_army_strength_matches_python(browser):
           const C = await import("./static/js/common.js"), P = await import("./static/js/panels.js");
         return JSON.stringify({json.dumps(cases)}.map((c) => ({{
           strength: C.armyStrength(c.units, c.army, c.rules),
-          cheapest: P.cheapestArmy(c.units, c.need, c.rules, c.apart, c.upgrade),
-          best: P.bestStrength(c.units, c.rules, c.apart, c.upgrade)}})));
+          cheapest: P.cheapestArmy(c.units, c.need, c.rules, c.upgrade),
+          best: P.bestStrength(c.units, c.rules, c.upgrade)}})));
       }})()"""))
     finally:
         network.server.close()

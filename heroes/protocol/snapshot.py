@@ -10,11 +10,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..engine.actions import buildable
-from ..engine.combat import affordable_upgrades, army_strength, lone_hydra
+from ..engine.combat import affordable_upgrades, army_strength
 from ..engine.data import TERRAINS
 from ..engine.economy import holdings
 from ..engine.movement import base_move_points, reachable
-from ..engine.effects import (Battle, active_effects, battle_bonus, effects_of, hire_cost, hireable_units, hydra_unit,
+from ..engine.effects import (Battle, active_effects, battle_bonus, effects_of, hire_cost, hireable_units,
                               move_cost, preview_battle, unit_strength)
 from ..engine.scoring import score_player
 from ..engine.state import RESOURCE_VP, ROUNDS
@@ -244,8 +244,6 @@ def decision_data(game: Game, decision: Decision) -> dict:
         data["strength_rules"] = strength_rules(game, p, battle)
         if decision.kind == "commit_army":
             data["opponent_rules"] = {q: strength_rules(game, int(q), battle) for q in data["opponents"]}
-        if decision.kind == "fight_monster" and lone_hydra(game, p):
-            data["hydra_alone"] = {"unit": hydra_unit(game, p), "region": lone_hydra(game, p)}
     if decision.kind == "action_order":
         data["reach"] = move_preview(game)
     return data

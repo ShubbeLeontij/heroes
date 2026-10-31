@@ -97,7 +97,7 @@ const less = (a, b) => {
 
 // Самая слабая заявка, которой хватает для победы (сила больше need).
 // Возвращает [заявка, сколько единиц модифицировать] или null — не хватит и всех.
-export function cheapestArmy(units, need, rules = null, apart = null, upgrade = null) {
+export function cheapestArmy(units, need, rules = null, upgrade = null) {
   const most = (upgrade || {}).max || 0;
   const needed = (army) => {
     let strength = armyStrength(units, army, rules);
@@ -110,8 +110,8 @@ export function cheapestArmy(units, need, rules = null, apart = null, upgrade = 
   };
   const ids = Object.keys(units);
   const total = ids.reduce((t, u) => t * (units[u].count + 1), 1);
-  if (total > MAX_COMBINATIONS) {   // слишком много вариантов: всех, кроме отдельной гидры
-    const army = Object.fromEntries(ids.filter((u) => u !== apart && units[u].count).map((u) => [u, units[u].count]));
+  if (total > MAX_COMBINATIONS) {   // слишком много вариантов: всех
+    const army = Object.fromEntries(ids.filter((u) => units[u].count).map((u) => [u, units[u].count]));
     const n = needed(army);
     return n === null ? null : [army, n];
   }
@@ -121,7 +121,6 @@ export function cheapestArmy(units, need, rules = null, apart = null, upgrade = 
     if (i === ids.length) {
       const army = {};
       ids.forEach((u, j) => { if (chosen[j]) army[u] = chosen[j]; });
-      if (apart in army && Object.keys(army).length > 1) return;
       const n = needed(army);
       if (n === null) return;
       const key = [n, armyStrength(units, army, rules, upgrade, n), chosen.reduce((s, x) => s + x, 0)];
@@ -141,17 +140,14 @@ export function cheapestArmy(units, need, rules = null, apart = null, upgrade = 
 }
 
 // Наибольшая сила заявки
-export function bestStrength(units, rules = null, apart = null, upgrade = null) {
-  const most = (upgrade || {}).max || 0;
-  if (!(apart in units)) return armyStrength(units, null, rules, upgrade, most);
-  const army = Object.fromEntries(Object.entries(units).filter(([u]) => u !== apart).map(([u, v]) => [u, v.count]));
-  return Math.max(armyStrength(units, army, rules, upgrade, most), armyStrength(units, { [apart]: 1 }, rules));
+export function bestStrength(units, rules = null, upgrade = null) {
+  return armyStrength(units, null, rules, upgrade, (upgrade || {}).max || 0);
 }
 
 // Заявка войск: сколько единиц каждого вида; итоговая сила и хватит ли её.
 class ArmyPicker {
-  constructor(units, need = null, onChange = null, rules = null, apart = null, upgrade = null) {
-    Object.assign(this, { units, need, onChange, rules, apart, upgrade });
+  constructor(units, need = null, onChange = null, rules = null, upgrade = null) {
+    Object.assign(this, { units, need, onChange, rules, upgrade });
     this.counters = {};
     this.upgradeCounter = null;
     this.summary = h("p.summary");
@@ -196,14 +192,8 @@ class ArmyPicker {
   }
 
   get valid() {
-    return Object.values(this.counters).every((c) => c.valid) && !this.mixed()
+    return Object.values(this.counters).every((c) => c.valid)
       && (this.upgradeCounter === null || this.upgradeCounter.valid);
-  }
-
-  // отдельная гидра заявлена вместе с войсками — так нельзя
-  mixed() {
-    const army = this.army();
-    return this.apart in army && Object.keys(army).length > 1;
   }
 
   army() {
@@ -243,10 +233,7 @@ class ArmyPicker {
       }
     }
     let text, cls = "";
-    if (this.mixed()) {
-      text = `${this.units[this.apart].name} стоит в другом регионе и сражается только одна`;
-      cls = "bad";
-    } else if (!this.valid) {
+    if (!this.valid) {
       text = "Введите числа в пределах того, что у вас есть";
       cls = "bad";
     } else {
@@ -908,7 +895,7 @@ class CommitArmy extends Panel {
     }
     this.note("Побеждает наибольшая заявленная сила; при равенстве проигрывают все. Все заявленные войска "
       + "погибают при любом исходе. Можно никого не заявлять.");
-    this.picker = new ArmyPicker(this.data.units, null, () => this.refresh(), this.data.strength_rules, null, this.data.upgrade);
+    this.picker = new ArmyPicker(this.data.units, null, () => this.refresh(), this.data.strength_rules, this.data.upgrade);
     this.body.append(this.picker.el);
     this.ok = this.button("Заявить", () => this.send(this.picker.answer()), true);
     this.refresh();
@@ -1010,9 +997,9 @@ class CaptureFortress extends Panel {
     const d = this.data, rules = d.strength_rules;
     this.note(`Крепость ${d.strength}${mark("shield")} → ${reward(d.vp, d.loot)}. Ваша сила должна быть `
       + `больше ${d.strength}${mark("shield")}; заявленные войска погибают при любом исходе.`, "");
-    this.picker = new ArmyPicker(d.units, d.strength, () => this.refresh(), rules, null, d.upgrade);
+    this.picker = new ArmyPicker(d.units, d.strength, () => this.refresh(), rules, d.upgrade);
     this.body.append(this.picker.el);
-    this.picker.preset(...(cheapestArmy(d.units, d.strength, rules, null, d.upgrade) || [{}, 0]));
+    this.picker.preset(...(cheapestArmy(d.units, d.strength, rules, d.upgrade) || [{}, 0]));
     this.ok = this.button("Штурмовать", () => this.send(this.picker.answer()), true);
     this.button("Не штурмовать", () => this.send(null));
     this.refresh();
@@ -1025,20 +1012,22 @@ class CaptureFortress extends Panel {
 }
 
 class FightMonster extends Panel {
-  static title = "Бой с чудовищем";
+  heading() {
+    return this.data.hydra ? "Бой гидры с чудовищем" : "Бой с чудовищем";
+  }
 
   build() {
     const cands = this.data.candidates;
     this.rules = this.data.strength_rules;
-    const alone = this.data.hydra_alone;
-    this.apart = alone ? alone.unit : null;
     this.upgrade = this.data.upgrade;
-    const top = bestStrength(this.data.units, this.rules, this.apart, this.upgrade);
-    this.note("Не больше одного чудовища за раунд. Неистраченные очки перемещения позволяют пропустить "
-      + `чудовищ в вашей линии. Ваша наибольшая сила: ${top}${mark("power")}.`);
-    if (alone) {
-      this.note(`Гидра стоит отдельно, в регионе ${alone.region}: она может сразиться вместо войска — одна; `
-        + "добыча чудовища тогда теряется, гидра погибает.", "hint");
+    const top = bestStrength(this.data.units, this.rules, this.upgrade);
+    if (this.data.hydra) {
+      this.note(`Гидра стоит отдельно, в регионе ${this.data.region}: после вашего боя она может сразиться `
+        + "с первым необведённым чудовищем вашей линии — пропускать чудовищ она не может. Добыча чудовища "
+        + `теряется, гидра погибает при любом исходе. Сила гидры: ${top}${mark("power")}.`);
+    } else {
+      this.note("Не больше одного чудовища за раунд. Неистраченные очки перемещения позволяют пропустить "
+        + `чудовищ в вашей линии. Ваша наибольшая сила: ${top}${mark("power")}.`);
     }
     const keys = Object.keys(cands).sort((a, b) => Number(a) - Number(b));
     this.choice = new Radios(keys.map((key) => {
@@ -1047,7 +1036,7 @@ class FightMonster extends Panel {
     }), () => this.picked());
     this.body.append(this.choice.el);
     this.note("Чудовище можно выбрать и тапом по его рисунку в линии на планшете.");
-    this.picker = new ArmyPicker(this.data.units, null, () => this.refresh(), this.rules, this.apart, this.upgrade);
+    this.picker = new ArmyPicker(this.data.units, null, () => this.refresh(), this.rules, this.upgrade);
     this.body.append(this.picker.el);
     this.ok = this.button("Сражаться", () => this.confirm(), true);
     this.button("Не сражаться", () => this.send(null));
@@ -1064,7 +1053,7 @@ class FightMonster extends Panel {
   picked() {
     const need = this.data.candidates[this.choice.value].strength;
     this.picker.setNeed(need);
-    const [army, upgrades] = cheapestArmy(this.data.units, need, this.rules, this.apart, this.upgrade) || [{}, 0];
+    const [army, upgrades] = cheapestArmy(this.data.units, need, this.rules, this.upgrade) || [{}, 0];
     this.picker.preset(army, upgrades);
     this.app.board?.setMonster?.(Number(this.choice.value));
   }
