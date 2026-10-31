@@ -192,6 +192,39 @@ def test_hydra_alone_must_fight_and_gives_no_rewards():
     assert nagas.resources == {"wood": 0, "iron": 0, "gold": 0}
 
 
+def test_lone_hydra_fights_a_monster_after_nagas_without_skipping():
+    """Отдельная гидра бьёт чудовище после наги, своим боем: только первое необведённое (пропускать нельзя),
+    добыча теряется, гидра погибает."""
+    offered = []
+
+    def fight(data):
+        offered.append((data.get("hydra", False), sorted(data["candidates"]), sorted(data["units"])))
+        return {"monster": 0, "army": {"hydra": 1}} if data.get("hydra") else {"monster": 2, "army": {"krak": 2}}
+
+    game = make(["nagas", "humans"], [Scripted(fight_monster=fight), Scripted()])
+    nagas = game.state.players[0]
+    nagas.hydra, nagas.units["hydra"], nagas.units["krak"] = "Флисс", 1, 3
+    combat.fight_monster(game, 0, leftover=2)
+    combat.hydra_fight_monster(game, 0)
+    assert offered == [(False, ["0", "1", "2"], ["krak"]), (True, ["0"], ["hydra"])]
+    assert nagas.monsters[:3] == ["monster", None, "monster"]
+    assert nagas.hydra is None and not nagas.units["hydra"] and nagas.units["krak"] == 1
+    assert nagas.resources == {"wood": 1, "iron": 1, "gold": 1}   # добыча только второго боя — наги
+
+
+def test_lone_hydra_cannot_fight_a_monster_too_strong_for_her():
+    game = make(["nagas", "humans"], [Scripted(fight_monster={"monster": 3, "army": {"hydra": 1}}), Scripted()])
+    nagas = game.state.players[0]
+    nagas.hydra, nagas.units["hydra"] = "Флисс", 1
+    nagas.monsters[:3] = ["monster"] * 3
+    combat.hydra_fight_monster(game, 0)   # 18 > 8: можно
+    assert nagas.monsters[3] == "monster"
+    nagas.hydra, nagas.units["hydra"] = "Флисс", 1
+    nagas.monsters[4:7] = ["monster"] * 3   # первое необведённое — 33, гидре не по силам: вопроса нет
+    combat.hydra_fight_monster(game, 0)
+    assert game.players[0].asked == ["fight_monster"] and nagas.hydra == "Флисс"
+
+
 def test_hydra_next_to_nagas_is_weakened_by_kraks():
     game = make(["nagas", "humans"])
     player = game.state.players[0]

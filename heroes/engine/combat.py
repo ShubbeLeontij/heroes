@@ -273,6 +273,7 @@ def resolve_encounters(game: Game, leftover: dict[int, int], moved: set[int] | N
         hydra_capture_fortress(game, p)
     for p in order:
         fight_monster(game, p, leftover[p], stayed=p not in moved)
+        hydra_fight_monster(game, p)
     for p in order:
         if p in entitled and p not in stole:
             try_take_artifact(game, p)
@@ -666,8 +667,7 @@ def hydra_capture_fortress(game: Game, p: int) -> None:
 
 
 def fight_monster(game: Game, p: int, leftover: int, stayed: bool = False) -> None:
-    """Бой с чудовищем своей линии. Наги могут драться отдельной гидрой вместо войска (тогда без ресурсов);
-    нежить с Алтарём, оставшись на месте, выбирает любое чудовище линии."""
+    """Бой с чудовищем своей линии; нежить с Алтарём, оставшись на месте, выбирает любое чудовище линии."""
     st = game.state
     player = st.players[p]
     line = game.monster_line(p)
@@ -676,43 +676,37 @@ def fight_monster(game: Game, p: int, leftover: int, stayed: bool = False) -> No
     any_monster = stayed and effects_of(game, p, "fight_any_monster_if_stayed")
     candidates = uncircled if any_monster else uncircled[: leftover + 1]
     battle = Battle("monster", player.region)
-    hydra_region = lone_hydra(game, p)
     units = available_units(game, p)
-    pool = {**units, **(hydra_army(game, p) if hydra_region else {})}
-    if not candidates or not (any(pool.values()) or battle_bonus(game, p, battle)):
+    if not candidates or not (any(units.values()) or battle_bonus(game, p, battle)):
         return
-    best = max(max_strength(game, p, battle, units),
-               army_strength(game, p, hydra_army(game, p), Battle("monster", hydra_region)) if hydra_region else 0)
+    best = max_strength(game, p, battle, units)
     rows = [f"  {i}: strength {m.strength}, reward: {m.vp} VP" + (f" and {fmt_res(m.loot)}" if m.loot else "")
             for i, m in ((i, line[i]) for i in candidates)]
     skip = ("Altar: you stayed, so you may fight any monster of your line" if any_monster
             else f"Unspent MP: {leftover} — you may skip that many monsters")
-    hydra_note = (f"\nYour Гидра is alone in {hydra_region}: she may fight instead of your army (alone, "
-                  "the monster's loot is lost, she dies)." if hydra_region else "")
+    hydra_note = ("\nYour Гидра is alone in another region: after this fight she may fight the leftmost uncircled "
+                  "monster herself." if lone_hydra(game, p) else "")
     answer = game.ask(
         p, "fight_monster",
         f"Monster fight (at most one per round). {skip}.\n"
         + "\n".join(rows)
-        + f"\nYour units: {army_text(game, p, battle, pool)}. To win, your strength must exceed the monster's; "
+        + f"\nYour units: {army_text(game, p, battle, units)}. To win, your strength must exceed the monster's; "
         f"committed units die. A commitment that cannot win is not accepted. You may decline to fight."
         f"{hydra_note}{upgrade_text(game, p)}",
         {"candidates": {str(i): {"strength": line[i].strength, "loot": line[i].loot, "vp": line[i].vp}
                         for i in candidates},
-         "units": army_data(game, p, battle, pool), **({"upgrade": upgrade_data(game, p)} if upgrade_data(game, p) else {})},
-        lambda a: check_monster(game, p, a, candidates, pool, hydra_region),
+         "units": army_data(game, p, battle, units), **({"upgrade": upgrade_data(game, p)} if upgrade_data(game, p) else {})},
+        lambda a: check_monster(game, p, a, candidates, units, battle),
         None,
         # ни одно доступное чудовище не победить даже всеми войсками
         forced=all(line[i].strength >= best for i in candidates),
-        recorded=lambda a: check_monster(game, p, a, candidates, pool, hydra_region, strict=False),
+        recorded=lambda a: check_monster(game, p, a, candidates, units, battle, strict=False),
         reason=f"even all your units (strength {best}) could not beat any monster you could reach, so you did not fight",
     )
     if not answer:
         return
     monster = line[answer["monster"]]
     army = answer["army"]
-    alone = bool(hydra_region and army.get(hydra_unit(game, p)))
-    if alone:
-        battle = Battle("monster", hydra_region)
     upgrades = ask_upgrades(game, battle, {p: army}, secret=False, planned={p: answer.get("upgrade")})[p]
     strength = army_strength(game, p, army, battle, upgrades)
     lose_units(game, p, army)
@@ -722,36 +716,71 @@ def fight_monster(game: Game, p: int, leftover: int, stayed: bool = False) -> No
         return
     monsters[answer["monster"]] = "monster"
     game.log(f"{name} defeats a strength-{monster.strength} monster (army strength {strength})")
-    if alone:
-        game.log(f"{name}'s Гидра fought alone: the monster's loot is lost")
-        return
     gain(game, p, monster.loot, f"strength-{monster.strength} monster defeated")
     for e in effects_of(game, p, "on_monster_win"):
         gain(game, p, e["gain"], "building effect for defeating a monster")
     on_battle_win(game, p)
 
 
-def check_monster(game: Game, p: int, answer: Any, candidates: list[int], pool: dict[str, int] | None = None,
-                  hydra_region: str | None = None, strict: bool = True) -> str | None:
+def hydra_fight_monster(game: Game, p: int) -> None:
+    """Отдельная гидра после боя наги может сразиться с первым необведённым чудовищем её линии (пропускать
+    чудовищ нельзя). Победа даёт только ПО — ресурсы чудовища теряются; гидра погибает при любом исходе."""
+    st = game.state
+    player = st.players[p]
+    region = lone_hydra(game, p)
+    uncircled = [i for i, m in enumerate(player.monsters) if m is None]
+    if region is None or not uncircled:
+        return
+    index = uncircled[0]
+    monster = game.monster_line(p)[index]
+    battle = Battle("monster", region)
+    army = hydra_army(game, p)
+    strength = army_strength(game, p, army, battle)
+    answer = game.ask(
+        p, "fight_monster",
+        f"Your Гидра is alone in {region} and may fight the leftmost uncircled monster of your line (she cannot "
+        f"skip monsters):\n  {index}: strength {monster.strength}, reward: {monster.vp} VP (its loot "
+        f"{fmt_res(monster.loot)} would be lost)\nГидра's strength: {strength}; she dies after the fight. "
+        "A fight that cannot be won is not accepted. You may decline to fight.",
+        {"candidates": {str(index): {"strength": monster.strength, "loot": {}, "vp": monster.vp}},
+         "units": army_data(game, p, battle, army), "region": region, "hydra": True},
+        lambda a: check_hydra_monster(game, p, a, index, army, battle),
+        None,
+        forced=strength <= monster.strength,
+        recorded=lambda a: check_hydra_monster(game, p, a, index, army, battle, strict=False),
+        reason=f"Гидра's strength {strength} could not beat the strength-{monster.strength} monster, "
+               "so she did not fight",
+    )
+    if not answer:
+        return
+    lose_units(game, p, answer["army"])
+    name = player.name
+    if strength <= monster.strength:
+        game.log(f"{name}'s Гидра loses to a strength-{monster.strength} monster (strength {strength})")
+        return
+    player.monsters[index] = "monster"
+    game.log(f"{name}'s Гидра defeats a strength-{monster.strength} monster (strength {strength}); the loot is lost")
+
+
+def check_hydra_monster(game: Game, p: int, answer: Any, index: int, army: dict[str, int], battle: Battle,
+                        strict: bool = True) -> str | None:
+    if answer is not None and isinstance(answer, dict) and answer.get("army") == {}:
+        return "Only your Гидра can fight here: commit her or decline the fight"
+    return check_monster(game, p, answer, [index], army, battle, strict)
+
+
+def check_monster(game: Game, p: int, answer: Any, candidates: list[int], pool: dict[str, int], battle: Battle,
+                  strict: bool = True) -> str | None:
     """strict — не принимать заявку, которой чудовище заведомо не победить (в старых сохранениях такие есть)."""
     if answer is None:
         return None
     if not isinstance(answer, dict) or not {"monster", "army"} <= set(answer) <= {"monster", "army", "upgrade"}:
         return 'Expected {"monster": number, "army": {...}} or null'
     error = check_choice(answer["monster"], candidates)
-    error = error or check_army(answer["army"], available_units(game, p) if pool is None else pool)
+    error = error or check_army(answer["army"], pool)
     error = error or check_upgrade(game, p, answer.get("upgrade"))
-    if error:
+    if error or not strict:
         return error
-    alone = False
-    if hydra_region:
-        hydra = hydra_unit(game, p)
-        alone = bool(answer["army"].get(hydra))
-        if alone and any(n for u, n in answer["army"].items() if u != hydra):
-            return f"Your Гидра is in {hydra_region}, apart from your army: she can only fight alone"
-    if not strict:
-        return None
-    battle = Battle("monster", hydra_region if alone else game.state.players[p].region)
     return check_beats(game, p, answer["army"], answer.get("upgrade"), battle,
                        game.monster_line(p)[answer["monster"]].strength)
 
