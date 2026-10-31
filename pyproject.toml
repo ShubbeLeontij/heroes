@@ -1,6 +1,6 @@
 [project]
 name = "heroes"
-version = "0.13.1"
+version = "0.13.2"
 description = "Компьютерная версия настольной игры «Герои» (Hobby World) с ИИ-игроками"
 requires-python = ">=3.12"
 

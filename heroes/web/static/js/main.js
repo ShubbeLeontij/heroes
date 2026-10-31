@@ -502,10 +502,9 @@ class App {
       items.push(h("span.order-chip" + (now.has(p) ? ".now" : ""), { style: { "--seat": C.color(p) } },
         `${i + 1}. ${C.nameOf(static_, p, true)}${role}`));
     });
-    const upcoming = C.nextFirstPlayers(static_, st, static_.names.length);
-    if (upcoming.length) {
-      items.push(h("span.label.upcoming", "Первым будет: " + upcoming.map(([r, p], j) =>
-        (j === 0 ? "раунд " : "") + `${r} — ${C.nameOf(static_, p, true)}`).join(", ")));
+    const [next] = C.nextFirstPlayers(static_, st, 1);   // только следующий раунд
+    if (next) {
+      items.push(h("span.label.upcoming", `Первым будет: раунд ${next[0]} — ${C.nameOf(static_, next[1], true)}`));
     } else {
       items.push(h("span.label.upcoming", "Последний раунд."));
     }
