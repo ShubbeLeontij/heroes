@@ -1,0 +1,97 @@
+{
+  "label": "opp-milestones-high",
+  "time": "2026-11-01_23-48-21",
+  "rounds_played": 3,
+  "rounds": 3,
+  "interrupted": false,
+  "error": null,
+  "wall_seconds": 129,
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "tools": true,
+  "seed": 1,
+  "factions": [
+    "humans",
+    "dwarves",
+    "undead",
+    "nagas"
+  ],
+  "session": "8df6fe60-6f36-493c-b13b-8fceef026494",
+  "session_cost_usd": 0.6215,
+  "defaults_used": 0,
+  "git": {
+    "head": "ade7e9a",
+    "dirty": true
+  },
+  "inputs": {
+    "notes": null,
+    "rules_special": "c36b16c9badb",
+    "rules_eng": "e09c90a39e31"
+  },
+  "totals": {
+    "calls": 11,
+    "failed": 0,
+    "seconds": 128.9,
+    "input": 392229,
+    "output": 9190,
+    "thinking": 4431,
+    "cost_usd": 0.6213,
+    "tools": 1
+  },
+  "by_kind": {
+    "game_plan": {
+      "calls": 1,
+      "seconds": 30.8,
+      "input": 38174,
+      "output": 2304,
+      "thinking": 715,
+      "cost_usd": 0.2054,
+      "tools": 1
+    },
+    "action_order": {
+      "calls": 1,
+      "seconds": 23.3,
+      "input": 23997,
+      "output": 1940,
+      "thinking": 1518,
+      "cost_usd": 0.0791,
+      "tools": 0
+    },
+    "destination": {
+      "calls": 3,
+      "seconds": 26.8,
+      "input": 110034,
+      "output": 1821,
+      "thinking": 864,
+      "cost_usd": 0.141,
+      "tools": 0
+    },
+    "build_recruit": {
+      "calls": 2,
+      "seconds": 18.1,
+      "input": 75443,
+      "output": 1281,
+      "thinking": 570,
+      "cost_usd": 0.0947,
+      "tools": 0
+    },
+    "fight_monster": {
+      "calls": 2,
+      "seconds": 15.5,
+      "input": 67590,
+      "output": 1029,
+      "thinking": 462,
+      "cost_usd": 0.0489,
+      "tools": 0
+    },
+    "distribute_resources": {
+      "calls": 2,
+      "seconds": 14.4,
+      "input": 76991,
+      "output": 815,
+      "thinking": 302,
+      "cost_usd": 0.0522,
+      "tools": 0
+    }
+  }
+}

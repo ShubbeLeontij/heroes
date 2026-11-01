@@ -1,0 +1,36 @@
+diff --git a/docs/PROMPTS.md b/docs/PROMPTS.md
+index 9cfff5c..d5fec16 100644
+--- a/docs/PROMPTS.md
++++ b/docs/PROMPTS.md
+@@ -59,8 +59,9 @@
+ - Когда: перед самым первым решением, вместе с системным промптом.
+ - Даётся: просьба продумать (кто играет за соперников, не говорится):
+   - свой план: экономика, порядок зданий, цели (чудовища, крепости, артефакты), примерные сроки, стартовый регион;
+-  - соперников по их планшетам: как каждый скорее всего будет играть, какие здания будет строить первыми и к какому
+-    раунду, как его игра изменится после них; за какими событиями следить и как на них отвечать;
++  - соперников по их планшетам: вероятный порядок строительства каждого (что первым и к какому раунду) и его
++    главные источники ПО; ключевые точки в его развитии, за которыми надо следить (когда он заметно усилится,
++    ускорится или начнёт набирать ПО), с ожидаемым раундом и ответом на каждую;
+   - артефакты: цена и эффект для себя и для каждого соперника; какие брать самому и когда, какие не отдать
+     сопернику, какие не стоят того.
+ - Ответ: план текстом, до ≈2500 символов.
+diff --git a/heroes/protocol/prompts.py b/heroes/protocol/prompts.py
+index ee48aae..7974b5f 100644
+--- a/heroes/protocol/prompts.py
++++ b/heroes/protocol/prompts.py
+@@ -211,10 +211,11 @@ def game_plan(game: Game, p: int, tools: bool) -> str:
+         "game. Use the rules, your faction board, the opponents' boards, the artifacts, the map and your strategy notes. Cover:\n"
+         "- your overall plan: economy, the order of buildings, which monsters, fortresses and artifacts to go for, "
+         "a rough timeline over the 16 rounds and a good starting region;\n"
+-        "- your opponents: analyse each of them from its full faction board. How will it most likely play? Which "
+-        "buildings will it rush first, in which round can it have them, and how will its play change after that (new "
+-        "units, more strength, more MP, VP sources)? Which events in the game must you watch for (a key building "
+-        "built, a hire, a fortress or artifact taken, its army growing past yours) and how will you react to each?\n"
++        "- your opponents: for each of them, work out from its full faction board its most likely build order (which "
++        "buildings first, by which round) and its main sources of VP. Then name the milestones in its development "
++        "that you must watch for: the moments it becomes much stronger, faster or starts scoring (a key building, a "
++        "hire, a fortress or artifact taken, its army outgrowing yours), with the round you expect each one, and "
++        "how you will react.\n"
+         "- the artifacts: for each one, what it costs you and what it gives you, and what it would give each opponent. "
+         "Which ones to take yourself and when, which ones you must deny an opponent (take first or win in battle), "
+         "and which ones are not worth it.\n"

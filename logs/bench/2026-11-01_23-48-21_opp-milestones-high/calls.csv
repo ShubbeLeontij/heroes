@@ -1,0 +1,12 @@
+n,round,kind,ok,seconds,input,output,thinking,cost_usd,tools
+1,1,game_plan,1,30.8,38174,2304,715,0.2054,1
+2,1,action_order,1,23.3,23997,1940,1518,0.0791,0
+3,1,destination,1,5.4,28131,232,0,0.0425,0
+4,1,fight_monster,1,8.6,29093,604,319,0.0254,0
+5,1,build_recruit,1,7.3,32601,515,159,0.0442,0
+6,2,destination,1,12.7,35865,1020,630,0.053,0
+7,2,distribute_resources,1,6.5,37560,310,68,0.0269,0
+8,2,fight_monster,1,6.9,38497,425,143,0.0235,0
+9,2,distribute_resources,1,7.9,39431,505,234,0.0253,0
+10,3,build_recruit,1,10.8,42842,766,411,0.0505,0
+11,3,destination,1,8.7,46038,569,234,0.0455,0
