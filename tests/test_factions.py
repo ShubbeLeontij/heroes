@@ -11,6 +11,7 @@ from heroes.engine.effects import Battle, army_strength, building_cost, hire_cos
 from heroes.engine.game import Game
 from heroes.engine.special import curse
 from heroes.players.base import Player
+from heroes.protocol import snapshot
 
 FACTIONS = ["humans", "undead", "dwarves", "orcs", "elves", "nagas"]
 
@@ -223,6 +224,18 @@ def test_lone_hydra_cannot_fight_a_monster_too_strong_for_her():
     nagas.monsters[4:7] = ["monster"] * 3   # первое необведённое — 33, гидре не по силам: вопроса нет
     combat.hydra_fight_monster(game, 0)
     assert game.players[0].asked == ["fight_monster"] and nagas.hydra == "Флисс"
+
+
+def test_lone_hydra_decides_about_the_fortress_in_her_region():
+    """Пока гидра решает о штурме, на странице регион гидры, а не тот, где стоят наги (issue #62)."""
+    seen = []
+    nagas = Scripted(capture_fortress=lambda data: seen.append(snapshot.thinking(game)))
+    game = make(["nagas", "humans"], [nagas, Scripted()])
+    player = game.state.players[0]
+    player.hydra, player.units["hydra"] = "Бринлор", 1   # 18 > 14
+    combat.hydra_capture_fortress(game, 0)
+    assert player.region == "Асандер" and seen == [[[0, "capture_fortress", "Бринлор"]]]
+    assert snapshot.thinking(game) == []
 
 
 def test_hydra_next_to_nagas_is_weakened_by_kraks():

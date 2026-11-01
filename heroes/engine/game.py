@@ -104,7 +104,7 @@ class Game:
         self.history: list[dict] = []  # все принятые решения — для журнала и воспроизведения
         self.listeners: list[Callable[[str], None]] = []  # подписчики на события лога (сетевые игроки, зритель)
         # кто сейчас принимает решение и какое (игрок -> вид решения); тайные решения — у нескольких сразу
-        self.thinking: dict[int, str] = {}
+        self.thinking: dict[int, Decision] = {}   # кто какое решение сейчас принимает
         self.thinking_lock = threading.Lock()
         self.watchers: list[Callable[[], None]] = []  # подписчики на смену thinking (браузеры за столом, зрители)
         # пока игроки выбирают, куда идти: куда может попасть каждый (игрок -> регион -> цена в ОП)
@@ -175,7 +175,7 @@ class Game:
         together = getattr(player, "decide_together", None)
         if together is None or len(decisions) == 1:
             return [self._answer(d) for d in decisions]
-        self._think(p, decisions[0].kind)
+        self._think(p, decisions[0])
         try:
             answers = together(decisions, GameView(self, p))
         finally:
@@ -205,7 +205,7 @@ class Game:
     def _answer(self, decision: Decision) -> Any:
         """Опросить игрока; при недопустимом ответе — переспросить, затем взять вариант по умолчанию."""
         player = self.players[decision.player]
-        self._think(decision.player, decision.kind)
+        self._think(decision.player, decision)
         try:
             for _ in range(self.max_attempts):
                 answer = player.decide(decision, GameView(self, decision.player))
@@ -221,11 +221,11 @@ class Game:
             self._think(decision.player, None)
         return answer
 
-    def _think(self, p: int, kind: str | None) -> None:
-        """Отметить, что игрок p начал (kind) или закончил (None) принимать решение, и сообщить подписчикам."""
+    def _think(self, p: int, decision: Decision | None) -> None:
+        """Отметить, что игрок p начал (decision) или закончил (None) принимать решение, и сообщить подписчикам."""
         with self.thinking_lock:
-            if kind:
-                self.thinking[p] = kind
+            if decision:
+                self.thinking[p] = decision
             else:
                 self.thinking.pop(p, None)
         for watcher in self.watchers:

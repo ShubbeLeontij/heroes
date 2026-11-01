@@ -50,8 +50,8 @@ export function nameOf(static_, p, avatar = false) {
 }
 
 export function thinkingText(static_, state, avatar = false) {
-  return (state.thinking || []).map(([p, kind]) => {
-    const doing = (UI.doing[kind] || "принимает решение").replace("{region}", state.players[p].region || "—");
+  return (state.thinking || []).map(([p, kind, region]) => {   // region — из вопроса (гидра наг стоит не там, где наги)
+    const doing = (UI.doing[kind] || "принимает решение").replace("{region}", region || state.players[p].region || "—");
     return `${nameOf(static_, p, avatar)} ${doing}…`;
   }).join("\n");
 }
