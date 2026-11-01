@@ -245,7 +245,7 @@ class ClaudePlayer(Player):
     def make_plan(self, game: Game, p: int) -> None:
         """Перед первым решением: Claude продумывает план на партию против выпавших фракций.
         План остаётся в сессии, а в журнал идёт как замысел (game_plan)."""
-        prompt = prompts.game_plan(game, p, opponent_kinds(game, p), self.tools)
+        prompt = prompts.game_plan(game, p, self.tools)
         for _ in range(self.retries + 1):
             try:
                 result = self.ask(game, p, "game_plan", prompt)

@@ -203,10 +203,10 @@ def played_by(opponents: dict[str, str]) -> str:
     return "; ".join(f"{notes.faction_names()[f]} — {kind}" for f, kind in opponents.items())
 
 
-def game_plan(game: Game, p: int, opponents: dict[str, str], tools: bool) -> str:
-    """Самый первый вопрос партии: продумать план. opponents — id фракции → кто за неё играет."""
+def game_plan(game: Game, p: int, tools: bool) -> str:
+    """Самый первый вопрос партии: продумать план."""
     return "\n\n".join([
-        f"THE GAME IS ABOUT TO START. Opponents are played by: {played_by(opponents)}.",
+        "THE GAME IS ABOUT TO START.",
         "QUESTION (game_plan): before your first decision, take time to think through your strategy for this whole "
         "game. Use the rules, your faction board, the opponents' boards, the artifacts, the map and your strategy notes. Cover:\n"
         "- your overall plan: economy, the order of buildings, which monsters, fortresses and artifacts to go for, "
