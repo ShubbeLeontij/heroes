@@ -25,7 +25,7 @@ OBJECT_GLYPHS = {"fortress": "⚔ крепость", "foundation": MARKS["founda
                  "artifact": MARKS["artifact"]}
 LEVELS = {n: MARKS[f"level{n}"] for n in range(1, 5)}   # гвозди уровня здания, как в памятке
 
-# чем занят игрок, пока принимает решение (state["thinking"]); {region} — регион, где он стоит
+# чем занят игрок, пока принимает решение (state["thinking"]); {region} — регион из вопроса, иначе — где он стоит
 DOING = {
     "choose_start": "выбирает стартовый регион",
     "action_order": "выбирает порядок действий раунда",

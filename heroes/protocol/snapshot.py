@@ -152,9 +152,10 @@ def static_data(game: Game) -> dict:
 
 
 def thinking(game: Game) -> list[list]:
-    """Кто сейчас принимает решение: [[игрок, вид решения], …]."""
+    """Кто сейчас принимает решение: [[игрок, вид решения, регион решения или None], …].
+    Регион — из данных вопроса: гидра наг решает о крепости в своём регионе, а не там, где стоят наги."""
     with game.thinking_lock:
-        return sorted([p, kind] for p, kind in game.thinking.items())
+        return sorted([p, d.kind, d.data.get("region")] for p, d in game.thinking.items())
 
 
 def snapshot(game: Game) -> dict:
