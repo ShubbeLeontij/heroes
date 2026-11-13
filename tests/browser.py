@@ -23,10 +23,14 @@ import urllib.request
 
 class WsClient:
     """Браузер без браузера: WebSocket-клиент на stdlib с тем же send/recv, что у protocol.Connection.
-    fragment — делить каждое сообщение на кадры по столько байт (проверка склейки фрагментов)."""
+    fragment — делить каждое сообщение на кадры по столько байт (проверка склейки фрагментов);
+    tls — ssl-контекст клиента: wss вместо ws."""
 
-    def __init__(self, port: int, fragment: int | None = None, path: str = "/ws", host: str = "127.0.0.1"):
+    def __init__(self, port: int, fragment: int | None = None, path: str = "/ws", host: str = "127.0.0.1",
+                 tls=None):
         self.sock = socket.create_connection((host, port))
+        if tls is not None:
+            self.sock = tls.wrap_socket(self.sock, server_hostname=host)
         key = base64.b64encode(os.urandom(16)).decode()
         self.sock.sendall((f"GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                            f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
@@ -174,10 +178,16 @@ class Browser:
         return result["result"].get("value")
 
     def wait_for(self, expression: str, timeout: float = 20.0, step: float = 0.1):
-        """Ждать, пока выражение JS не станет истинным; вернуть его значение."""
+        """Ждать, пока выражение JS не станет истинным; вернуть его значение. Ошибка JS — тоже «ещё нет»: window.app
+        страница создаёт, получив ui.json, и это бывает уже после события load (Browser.open)."""
         end = time.monotonic() + timeout
         while True:
-            value = self.evaluate(expression)
+            try:
+                value = self.evaluate(expression)
+            except RuntimeError:
+                if time.monotonic() > end:
+                    raise
+                value = None
             if value:
                 return value
             if time.monotonic() > end:

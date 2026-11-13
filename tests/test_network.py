@@ -156,8 +156,8 @@ def test_wizard_can_be_cancelled():
 
 
 def test_join_links_and_first_player_flag(monkeypatch):
-    assert cli.join_link("10.0.0.2", 7777, "Аня", "с ова") == "http://10.0.0.2:7777/?name=%D0%90%D0%BD%D1%8F&password=%D1%81%20%D0%BE%D0%B2%D0%B0"
-    assert cli.join_link("10.0.0.2", 7000) == "http://10.0.0.2:7000/"
+    assert cli.join_link("https://10.0.0.2", "Аня", "с ова") == "https://10.0.0.2/?name=%D0%90%D0%BD%D1%8F&password=%D1%81%20%D0%BE%D0%B2%D0%B0"
+    assert cli.join_link("http://10.0.0.2:7000") == "http://10.0.0.2:7000/"
     started = {}
 
     class FakeGame:

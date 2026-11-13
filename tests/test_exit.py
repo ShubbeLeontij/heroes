@@ -4,11 +4,14 @@ import pty
 import select
 import signal
 import socket
+import ssl
 import sys
 import time
 from pathlib import Path
 
-from heroes.net.protocol import VERSION, Connection
+from heroes.net.protocol import VERSION
+
+from browser import WsClient
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -41,7 +44,9 @@ def test_ctrl_c_stops_host_with_terminal(tmp_path):
     guest = None
     try:
         out = read_until(fd, b"Waiting for network players", 20)
-        guest = Connection(socket.create_connection(("127.0.0.1", port)))
+        trusting = ssl.create_default_context()   # сервер с самоподписанным сертификатом, как по умолчанию
+        trusting.check_hostname, trusting.verify_mode = False, ssl.CERT_NONE
+        guest = WsClient(port, tls=trusting)
         guest.send({"t": "hello", "version": VERSION, "name": "A", "mode": "gui"})
         out += read_until(fd, b"=== Round 1", 30)
         assert b"=== Round 1" in out, out

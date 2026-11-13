@@ -1,6 +1,7 @@
 """Минимальные офлайн-проверки Claude-игрока: вызов CLI подменяется генератором ответов."""
 import json
 import random
+import re
 import shutil
 import subprocess
 from types import SimpleNamespace
@@ -223,7 +224,9 @@ def test_analysis_goes_to_the_story(strategy_dir, tmp_path):
     claude.reflect(game, 0)
     story = claude.story_file.read_text(encoding="utf-8")
     assert story.startswith("# Лео (Орки): the story of the game") and "## Plan for the game" in story
-    assert "## Round 1 · " in story and "plan\n\n**Decision:** `" in story and "## Round 16 · " in story
+    # до последнего раунда, где Claude спрашивали (в 16-м ему, бывает, решать нечего)
+    last = max(int(r) for q in asked for r in re.findall(r"QUESTION \(\w+, round (\d+)/", q))
+    assert "## Round 1 · " in story and "plan\n\n**Decision:** `" in story and f"## Round {last} · " in story
     assert "*The engine rejected this answer: too far*" in story
     assert story.rstrip().endswith("## Review after the game\n\n- lost the race")
     assert thoughts and set(thoughts[1:]) == {"plan"}                    # зрителю — тот же анализ
