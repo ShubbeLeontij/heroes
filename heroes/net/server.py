@@ -5,15 +5,19 @@
 подключится снова, и повторяет ему текущий вопрос. Браузер заходит на тот же порт (web.py):
 он получает страницу веб-клиента, а её WebSocket садится за место. Зритель (hello с "watch")
 места не занимает: он видит партию так же, как её видят все, без чьих-либо тайн.
+
+С TLS (tls.py) браузер заходит по https и wss, обычный http перенаправляется на https, а соединения
+Connection (JSON по строке, без TLS) не принимаются.
 """
 from __future__ import annotations
 
 import socket
+import ssl
 import threading
 import time
 from typing import Callable
 
-from . import web
+from . import tls, web
 from .protocol import MODES, VERSION, Connection
 
 MAX_AVATAR = 300_000  # аватарка в hello (base64) длиннее — не принимается
@@ -125,9 +129,11 @@ class Audience:
 
 
 class Server:
-    def __init__(self, port: int, password: str | None = None, log_fn: Callable[[str], None] = print):
+    def __init__(self, port: int, password: str | None = None, log_fn: Callable[[str], None] = print,
+                 tls: ssl.SSLContext | None = None):
         self.port = port
         self.password = password
+        self.tls = tls
         self.log_fn = log_fn
         self.seats: dict[str, Seat] = {}
         self.audience = Audience()
@@ -156,14 +162,29 @@ class Server:
                 return  # сервер закрыт
             threading.Thread(target=self._handshake, args=(sock, addr), daemon=True).start()
 
+    def url(self, address: str) -> str:
+        """Адрес страницы на этом компьютере; стандартный порт (443 для https, 80 для http) не пишется."""
+        scheme = "https" if self.tls else "http"
+        return f"{scheme}://{address}" + ("" if self.port == {"https": 443, "http": 80}[scheme] else f":{self.port}")
+
     def free_seats(self) -> list[str]:
         return [name for name, seat in self.seats.items() if not seat.connected]
 
     def _handshake(self, sock: socket.socket, addr) -> None:
         sock.settimeout(120)
         try:   # браузер: страница, картинки и профили, а запрос /ws — соединение для партии
-            conn = web.accept(sock, self.password) if web.is_http(sock) else Connection(sock)
-        except OSError:
+            if self.tls and tls.is_tls(sock):
+                conn = web.accept(tls.TlsSocket(sock, self.tls), self.password)
+            elif web.is_http(sock):
+                if self.tls:
+                    web.redirect(sock)
+                    return
+                conn = web.accept(sock, self.password)
+            elif self.tls:
+                raise ConnectionError("plain connection to a TLS server")
+            else:
+                conn = Connection(sock)
+        except (OSError, ValueError):   # ssl.SSLError — тоже OSError: например, браузер не принял сертификат
             sock.close()
             return
         if conn is None:

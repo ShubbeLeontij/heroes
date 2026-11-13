@@ -11,6 +11,7 @@
   python -m heroes --load saves/auto/<файл>.json    # продолжить сохранённую партию
   python -m heroes --continue                       # продолжить самую свежую
   python -m heroes --profiles                       # только страница «Профили и статистика»
+  python -m heroes --players human,bot --cert fullchain.pem --key privkey.pem   # свой сертификат вместо самоподписанного
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ import argparse
 import json
 import random
 import shutil
+import ssl
 import sys
 import threading
 import time
@@ -30,6 +32,7 @@ from .engine import scoring
 from .engine.data import DATA_DIR
 from .engine.game import Background, Game
 from .net.protocol import DEFAULT_PORT
+from .net import tls
 from .net.server import Server, local_addresses
 from .players.base import Player
 from .players.claude_cli import DEFAULT_EFFORT, DEFAULT_MODEL, ClaudePlayer
@@ -86,15 +89,17 @@ def print_thought(name: str, kind: str, comment: str) -> None:
 class Network:
     """Сервер партии; создаётся, только если за столом есть люди или партию открыли для зрителей."""
 
-    def __init__(self, port: int, password: str | None, log_fn: Callable[[str], None] = print):
+    def __init__(self, port: int, password: str | None, log_fn: Callable[[str], None] = print,
+                 tls: Callable[[], ssl.SSLContext | None] | None = None):
         self.port = port
         self.password = password
         self.log_fn = log_fn
+        self.tls = tls   # контекст TLS готовится, только когда сервер нужен: иначе незачем выпускать сертификат
         self.server: Server | None = None
 
     def open(self) -> Server:
         if self.server is None:
-            self.server = Server(self.port, self.password, self.log_fn)
+            self.server = Server(self.port, self.password, self.log_fn, self.tls() if self.tls else None)
         return self.server
 
     def seat(self, name: str):
@@ -153,6 +158,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     net = ap.add_argument_group("browser")
     net.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"game server port (default {DEFAULT_PORT})")
     net.add_argument("--password", help="game password (humans enter it in the browser)")
+    net.add_argument("--cert", metavar="FILE", help="TLS certificate (PEM, e.g. Let's Encrypt fullchain.pem); "
+                     f"default: a self-signed one made with openssl and kept in {tls.CERT_DIR}/")
+    net.add_argument("--key", metavar="FILE", help="private key of --cert (PEM), if it is not in the --cert file")
     net.add_argument("--watch", action="store_true",
                      help="open the game for spectators in a browser even when no humans are playing")
     net.add_argument("--profiles", action="store_true",
@@ -165,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.profiles:
         return serve_profiles(args)
     autosave = args.autosave or None
-    network = Network(args.port, args.password)
+    network = Network(args.port, args.password, tls=lambda: tls_context(args))
     if args.resume:
         found = [f for f in {savegame.latest(), autosave and savegame.latest(autosave)} if f]
         args.load = max(found, key=lambda f: f.stat().st_mtime, default=None)
@@ -287,10 +295,36 @@ def host_commands(game: Game, input_fn: Callable[[], str] = input, out: Callable
             out("Commands: `save [file]` — save the game; Ctrl+C — save and stop it.")
 
 
+def tls_context(args: argparse.Namespace) -> ssl.SSLContext | None:
+    """TLS сервера: сертификат хозяина (--cert, --key) или самоподписанный. None — без TLS: самоподписанный
+    сертификат сделать не вышло (нет openssl), тогда страница идёт по http."""
+    cert, key = getattr(args, "cert", None), getattr(args, "key", None)
+    if key and not cert:
+        raise SystemExit("--key needs --cert")
+    try:
+        return tls.context(cert, key)
+    except tls.TlsError as e:
+        if cert:
+            raise SystemExit(f"TLS: {e}") from None
+        print(f"⚠ TLS is off: {e}. The page is served over plain http; give a certificate with --cert.")
+        return None
+
+
+def start_server(server: Server) -> None:
+    try:
+        server.start()
+    except OSError as e:
+        hint = ""
+        if isinstance(e, PermissionError) and 0 < server.port < 1024:
+            hint = (f" On Linux ports below 1024 need extra rights; allow them until reboot with "
+                    f"`sudo sysctl -w net.ipv4.ip_unprivileged_port_start={server.port}`.")
+        raise SystemExit(f"Could not open port {server.port}: {e}.{hint} Or choose another port with --port") from None
+
+
 def linger(server: Server, commands: threading.Thread) -> None:
     """После партии страница ещё открыта: люди смотрят итоги и свою статистику (профили). Enter хозяина
     читает поток команд (commands) — он и завершается."""
-    print(f"\nThe page stays open for the results and the profile statistics (http://{local_addresses()[0]}:{server.port}).")
+    print(f"\nThe page stays open for the results and the profile statistics ({server.url(local_addresses()[0])}).")
     print("Press Enter to close it.")
     try:
         while commands.is_alive():
@@ -301,12 +335,9 @@ def linger(server: Server, commands: threading.Thread) -> None:
 
 def serve_profiles(args: argparse.Namespace) -> int:
     """Страница «Профили и статистика» без партии — до Ctrl+C."""
-    server = Server(args.port, args.password)
-    try:
-        server.start()
-    except OSError as e:
-        raise SystemExit(f"Could not open port {server.port}: {e}. Choose another one with --port") from None
-    print(f"Profiles and statistics: http://{local_addresses()[0]}:{server.port}/#profiles   (Ctrl+C — stop)")
+    server = Server(args.port, args.password, tls=tls_context(args))
+    start_server(server)
+    print(f"Profiles and statistics: {server.url(local_addresses()[0])}/#profiles   (Ctrl+C — stop)")
     try:
         while True:
             time.sleep(3600)
@@ -317,10 +348,10 @@ def serve_profiles(args: argparse.Namespace) -> int:
         server.close()
 
 
-def join_link(address: str, port: int, name: str | None = None, password: str | None = None) -> str:
-    """Адрес страницы; с именем и паролем браузер сразу садится за это место."""
+def join_link(base: str, name: str | None = None, password: str | None = None) -> str:
+    """Адрес страницы (base — Server.url); с именем и паролем браузер сразу садится за это место."""
     query = "&".join(f"{k}={quote(v)}" for k, v in (("name", name), ("password", password)) if v)
-    return f"http://{address}:{port}/" + (f"?{query}" if query else "")
+    return f"{base}/" + (f"?{query}" if query else "")
 
 
 def open_table(game: Game, server: Server, args: argparse.Namespace, out: Callable[[str], None] = print) -> bool:
@@ -329,22 +360,21 @@ def open_table(game: Game, server: Server, args: argparse.Namespace, out: Callab
         if isinstance(player, RemotePlayer):
             player.bind(game, p)
     Spectators(game, server.audience)
-    try:
-        server.start()
-    except OSError as e:
-        raise SystemExit(f"Could not open port {server.port}: {e}. Choose another one with --port") from None
+    start_server(server)
     password = getattr(args, "password", None)
-    address = local_addresses()[0]
+    base = server.url(local_addresses()[0])
     if server.seats:
         out("\nThe game is open. Each human opens their link in a browser — on a phone, tablet or computer:")
         for name in server.seats:
-            out(f"  {name}: {join_link(address, server.port, name, password)}")
-        out(f"  (or open http://{address}:{server.port} and enter the name"
-            + (" and the password)" if password else ")"))
-        out(f"Spectators: http://{address}:{server.port} → «Смотреть партию». Over the internet you need to forward "
+            out(f"  {name}: {join_link(base, name, password)}")
+        out(f"  (or open {base} and enter the name" + (" and the password)" if password else ")"))
+        out(f"Spectators: {base} → «Смотреть партию». Over the internet you need to forward "
             f"port {server.port} or share a VPN network (e.g. Tailscale).")
     else:
-        out(f"\nSpectators can watch the game in a browser: http://{address}:{server.port} → «Смотреть партию».")
+        out(f"\nSpectators can watch the game in a browser: {base} → «Смотреть партию».")
+    if server.tls and not getattr(args, "cert", None):
+        out("The certificate is self-signed: the browser warns about it the first time — "
+            "open «Advanced» and continue to the site.")
     try:
         server.wait_all()
     except KeyboardInterrupt:

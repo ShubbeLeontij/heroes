@@ -1,4 +1,5 @@
 """Веб-клиент: страница для браузера (телефон, планшет, ПК) на том же порту, что и сервер партии.
+Если у сервера TLS (tls.py), всё это идёт внутри него, а запрос по обычному http перенаправляется на https (redirect).
 
 Сервер (server.py) по первым байтам соединения узнаёт HTTP-запрос и отдаёт его сюда. Обычные
 запросы получают файлы страницы (heroes/web/static) и картинки (heroes/web/assets), запрос
@@ -115,6 +116,30 @@ def accept(sock: socket.socket, password: str | None = None) -> WebSocketConnect
         return None
 
 
+def redirect(sock: socket.socket) -> None:
+    """Сервер с TLS, а браузер пришёл по http: отправить его на тот же адрес по https и закрыть соединение."""
+    buffer = b""
+    try:
+        while b"\r\n\r\n" not in buffer:
+            if len(buffer) > MAX_HEADERS:
+                raise ValueError("headers too long")
+            chunk = sock.recv(4096)
+            if not chunk:
+                raise ConnectionError
+            buffer += chunk
+        _, target, headers = parse_request(buffer.partition(b"\r\n\r\n")[0])
+        if host := headers.get("host"):   # 302, а не 301: постоянный адрес браузер запомнил бы навсегда
+            respond(sock, 302, headers={"Location": f"https://{host}{target}", "Connection": "close"})
+        else:
+            respond(sock, 400, b"Use https", {"Content-Type": "text/plain", "Connection": "close"})
+    except (OSError, ValueError, ConnectionError):
+        pass
+    try:
+        sock.close()
+    except OSError:
+        pass
+
+
 def parse_request(head: bytes) -> tuple[str, str, dict[str, str]]:
     lines = head.decode("latin-1").split("\r\n")
     method, target, _ = lines[0].split(" ", 2)
@@ -128,7 +153,7 @@ def parse_request(head: bytes) -> tuple[str, str, dict[str, str]]:
 
 def respond(sock: socket.socket, status: int, body: bytes = b"", headers: dict[str, str] | None = None,
             head_only: bool = False) -> None:
-    reason = {200: "OK", 304: "Not Modified", 400: "Bad Request", 403: "Forbidden", 404: "Not Found",
+    reason = {200: "OK", 302: "Found", 304: "Not Modified", 400: "Bad Request", 403: "Forbidden", 404: "Not Found",
               405: "Method Not Allowed"}[status]
     lines = [f"HTTP/1.1 {status} {reason}", f"Content-Length: {len(body)}", *(f"{k}: {v}" for k, v in (headers or {}).items())]
     sock.sendall(("\r\n".join(lines) + "\r\n\r\n").encode("latin-1") + (b"" if head_only or status == 304 else body))

@@ -27,7 +27,7 @@ import socket
 # 5 — без консольного клиента (только данные), зрители
 VERSION = 5
 MODES = ("gui",)
-DEFAULT_PORT = 7777
+DEFAULT_PORT = 443   # стандартный порт https: в адресе его можно не писать
 
 
 class Connection:

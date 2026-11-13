@@ -3,6 +3,7 @@
 import contextlib
 import io
 import json
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -13,6 +14,7 @@ import pytest
 from heroes import cli, profiles
 from heroes.engine import scoring
 from heroes.engine.game import Game
+from heroes.net import tls
 from heroes.players.random_bot import RandomBot
 from heroes.protocol import render_text as R
 from heroes.web.marks import MARKS as M
@@ -37,10 +39,12 @@ def browser():
     b.close()
 
 
-def play(browser: Browser, seed: int, factions: list[str] | None, opponents: int = 2, drops: tuple[int, ...] = ()) -> dict:
+def play(browser: Browser, seed: int, factions: list[str] | None, opponents: int = 2, drops: tuple[int, ...] = (),
+         tls_context=None) -> dict:
     """Партия: место 0 — страница в тестовом режиме, остальные — боты. Возвращает window.testLog.
-    drops — после стольких ответов оборвать соединение страницы (она должна подключиться сама)."""
-    network = cli.Network(0, "secret", log_fn=lambda text: None)
+    drops — после стольких ответов оборвать соединение страницы (она должна подключиться сама);
+    tls_context — сервер с TLS: страница открывается по http и попадает на https."""
+    network = cli.Network(0, "secret", log_fn=lambda text: None, tls=tls_context and (lambda: tls_context))
     names = ["Гость", *[f"Бот{i}" for i in range(opponents)]]
     meta = {"players": ["human", *["bot"] * opponents], "seed": seed}
     game = Game(cli.make_players(meta, names, False, network), names=names, meta=meta, factions=factions)
@@ -64,6 +68,8 @@ def play(browser: Browser, seed: int, factions: list[str] | None, opponents: int
         threading.Thread(target=host, daemon=True).start()
         browser.errors.clear()
         browser.open(f"http://127.0.0.1:{server.port}/?name=Гость&password=secret&test=random&seed={seed}")
+        if tls_context:
+            assert browser.evaluate("location.protocol") == "https:"
         deadline = time.monotonic() + GAME_SECONDS
         while not finished.wait(0.5):
             assert time.monotonic() < deadline, browser.evaluate(
@@ -91,6 +97,17 @@ def play(browser: Browser, seed: int, factions: list[str] | None, opponents: int
 def test_random_forms_give_valid_answers(browser, seed):
     log = play(browser, seed, None, opponents=1 + seed % 3)
     assert {"action_order", "build_recruit", "destination"} <= set(log["kinds"])
+
+
+@pytest.mark.skipif(shutil.which("openssl") is None, reason="needs the openssl command")
+def test_game_over_https(browser, tmp_path):
+    """Самоподписанный сертификат (браузеру велено ему верить, как после «Всё равно перейти»), обрыв и переподключение."""
+    browser.call("Security.setIgnoreCertificateErrors", ignore=True)
+    try:
+        log = play(browser, 5, None, drops=(4,), tls_context=tls.context(*tls.self_signed(tmp_path, log_fn=print)))
+    finally:
+        browser.call("Security.setIgnoreCertificateErrors", ignore=False)
+    assert log["answers"] > 4
 
 
 def test_page_reconnects_by_itself(browser):
